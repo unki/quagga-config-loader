@@ -40,8 +40,8 @@ check_parameters "${@}"
 
 readonly DAEMON_CONFIG=${DAEMON}.conf
 readonly RUNNING_CONFIG=${QUAGGA_CONF_DIR}/${DAEMON_CONFIG}
-readonly PUPPET_CONFIG=${DAEMON_CONFIG}.puppet
-readonly PRESTAGE_CONFIG=${DAEMON_CONFIG}.prestage
+readonly PUPPET_CONFIG=${QUAGGA_CONF_DIR}/${DAEMON_CONFIG}.puppet
+readonly PRESTAGE_CONFIG=${QUAGGA_CONF_DIR}/${DAEMON_CONFIG}.prestage
 
 #
 # save running configuration
