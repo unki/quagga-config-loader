@@ -145,6 +145,7 @@ check_configuration () {
 check_parameters () {
    if [ $# -lt 1 ] || [ -z $1 ]; then
       show_help;
+      exit 0
    fi
 
    while getopts :hd:v OPTS; do
@@ -188,10 +189,7 @@ show_help ()
 {
 echo $0
 echo
-echo "  -h     ... help"
-echo "  -n arg ... node"
-echo "  -o arg ... object"
-echo "  -k arg ... key"
-echo "  -f arg ... write to file"
+echo "  -v     ... be verbose"
+echo "  -d arg ... quagga daemon (ospfd, bgpd, zebra)"
 echo
 }
