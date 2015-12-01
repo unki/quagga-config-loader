@@ -36,7 +36,7 @@ test -e quagga_config_loader.cfg || \
 check_requirements;
 check_privileges;
 check_configuration;
-check_parameters;
+check_parameters "${@}"
 
 readonly DAEMON_CONFIG=${DAEMON}.conf
 readonly RUNNING_CONFIG=${QUAGGA_CONF_DIR}/${DAEMON_CONFIG}.conf
