@@ -803,7 +803,7 @@ for ENTRY in "${ENTRIES[@]}"; do
          #
          if [ ${#NEW_CMDS[@]} -ge 2 ]; then
             for SUB_GROUP_CMD in ${GROUPING_CMDS[@]}; do
-               if [ "${NEW_CMDS[-1]}" == "exit" ] && [[ "${PREV2_CMD}" =~ ${SUB_GROUP_CMD} ]]; then
+               if [ "${NEW_CMDS[-1]}" == "exit" ] && [[ "${NEW_CMDS[-2]}" =~ ${SUB_GROUP_CMD} ]]; then
                   unset NEW_CMDS[${#NEW_CMDS[@]}-1]
                   unset NEW_CMDS[${#NEW_CMDS[@]}-1]
                   break
@@ -823,11 +823,12 @@ for ENTRY in "${ENTRIES[@]}"; do
       [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]](prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_TYPE=${BASH_REMATCH[1]}
       LIST_NAME=${BASH_REMATCH[2]}
-      if in_array RUNNING_ENTRIES "^ip[[:blank:]]${LIST_TYPE}[[:blank:]]${LIST_NAME}[[:blank:]]"; then
+      if in_array RUNNING_ENTRIES "ip ${LIST_TYPE} ${LIST_NAME}"; then
          if ! in_array REMOVE_CMDS "no ip ${LIST_TYPE} ${LIST_NAME}"; then
             REMOVE_CMDS+=( "no ip ${LIST_TYPE} ${LIST_NAME}" )
+            NEW_CMDS+=( "${ENTRY}" )
+            continue
          fi
-         continue;
       fi
    fi
 
