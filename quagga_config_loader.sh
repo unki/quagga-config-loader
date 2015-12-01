@@ -777,11 +777,16 @@ for ENTRY in "${ENTRIES[@]}"; do
    fi
 
    #
-   # if the same entry is still present in the running configuration,
-   # it's not required to reissue it. with bgpd that could lead to
-   # BGP sessions getting restarted then.
-   # but skip it only if command isn't a grouping-command (router bgp,
-   # route-map, etc.).
+   # now we try to figure out, if the same entry is still present in
+   # the running configuration and we do not need to reissue it on ${DAEMON}.
+   # What should be avoided in case of bgpd to not reestablish BGP session to
+   # its peers. But there are some special chases to handle.
+   #
+
+   #
+   # grouping-commands (router bgp, route-map, etc.) need special treating,
+   # as it could be required to enter a group first to issue the following
+   # command.
    #
    for GROUP_CMD in ${GROUPING_CMDS[@]}; do
       if [[ "${ENTRY}" =~ ${GROUP_CMD} ]]; then
@@ -810,13 +815,36 @@ for ENTRY in "${ENTRIES[@]}"; do
          continue 2;
       fi
    done
+   #
+   # if new items get added to prefix- or access-list, we completely delete the
+   # list and re-insert all items. so it's easier to guarantee the right order.
+   #
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]](access-list)[[:blank:]]([[:graph:]]+)[[:blank:]] ]] ||
+      [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]](prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
+      LIST_TYPE=${BASH_REMATCH[1]}
+      LIST_NAME=${BASH_REMATCH[2]}
+      if in_array RUNNING_ENTRIES "^ip[[:blank:]]${LIST_TYPE}[[:blank:]]${LIST_NAME}[[:blank:]]"; then
+         if ! in_array REMOVE_CMDS "no ip ${LIST_TYPE} ${LIST_NAME}"; then
+            REMOVE_CMDS+=( "no ip ${LIST_TYPE} ${LIST_NAME}" )
+         fi
+         continue;
+      fi
+   fi
+
+   # now finally.
    if in_array RUNNING_ENTRIES "${ENTRY}"; then
       continue
    fi
 
-   # ip ospf message-digest-key - a special case, command can not be in the
-   # running configuration. it needs to be 'no'ed first if it already exists
-   # in the running config!
+   #
+   # here we know that this entry needs be issued on ${DAEMON}
+   #
+
+   #
+   # ip ospf message-digest-key - a special case, command can not be
+   # overwriten in the running configuration (already-exists-error).
+   # it needs to be 'no'ed first.
+   #
    if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
       OSPF_MSG_KEY=${BASH_REMATCH[1]}
       if grep -Pzoqs "interface ${IF_NAME}\n(\s*)ip ospf message-digest-key ${OSPF_MSG_KEY}" ${RUNNING_CONFIG}; then
