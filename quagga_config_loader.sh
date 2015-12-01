@@ -705,7 +705,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       # distance bgp ([0-9]*) ([0-9]*) ([0-9]*) - a special case within a router-bgp.
       # best removed by issuing "no distance bgp" ignoring all suffix-parameters
       if [[ "${ENTRY}" =~ ^[[:blank:]]*distance[[:blank:]]bgp ]]; then
-         VTY_CALL+=" -c 'no distance bgp'"
+         REMOVE_CMDS+=(" -c 'no distance bgp'")
          break;
       fi
 
