@@ -705,7 +705,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       # distance bgp ([0-9]*) ([0-9]*) ([0-9]*) - a special case within a router-bgp.
       # best removed by issuing "no distance bgp" ignoring all suffix-parameters
       if [[ "${ENTRY}" =~ ^[[:blank:]]*distance[[:blank:]]bgp ]]; then
-         REMOVE_CMDS+=(" -c 'no distance bgp'")
+         REMOVE_CMDS+=( "no distance bgp" )
          break;
       fi
 
@@ -763,7 +763,7 @@ for ENTRY in "${ENTRIES[@]}"; do
       #
       ((NEXT_ENTRY=ENTRY_ID+1))
       if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
-         NEW_CMDS+=( " -c 'exit'" )
+         NEW_CMDS+=( "exit" )
          ENTERED_GROUP=
       fi
    fi
@@ -790,7 +790,7 @@ for ENTRY in "${ENTRIES[@]}"; do
          # closed by a '!' line, add a '!' as separator to the REMOVE_CMD list.
          #
          if [ ! -z "${ENTERED_GROUP}" ]; then
-            NEW_CMDS+=( " -c 'exit'" )
+            NEW_CMDS+=( "exit" )
          fi
 
          #
@@ -798,9 +798,7 @@ for ENTRY in "${ENTRIES[@]}"; do
          #
          if [ ${#NEW_CMDS[@]} -ge 2 ]; then
             for SUB_GROUP_CMD in ${GROUPING_CMDS[@]}; do
-               PREV2_CMD=${NEW_CMDS[-2]# -c \'}
-               PREV2_CMD=${PREV2_CMD%\'}
-               if [ "${NEW_CMDS[-1]}" == " -c 'exit'" ] && [[ "${PREV2_CMD}" =~ ${SUB_GROUP_CMD} ]]; then
+               if [ "${NEW_CMDS[-1]}" == "exit" ] && [[ "${PREV2_CMD}" =~ ${SUB_GROUP_CMD} ]]; then
                   unset NEW_CMDS[${#NEW_CMDS[@]}-1]
                   unset NEW_CMDS[${#NEW_CMDS[@]}-1]
                   break
@@ -808,7 +806,7 @@ for ENTRY in "${ENTRIES[@]}"; do
             done
          fi
          ENTERED_GROUP=${ENTRY}
-         NEW_CMDS+=( " -c '${ENTRY}'" )
+         NEW_CMDS+=( "${ENTRY}" )
          continue 2;
       fi
    done
@@ -822,11 +820,11 @@ for ENTRY in "${ENTRIES[@]}"; do
    if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
       OSPF_MSG_KEY=${BASH_REMATCH[1]}
       if grep -Pzoqs "interface ${IF_NAME}\n(\s*)ip ospf message-digest-key ${OSPF_MSG_KEY}" ${RUNNING_CONFIG}; then
-         NEW_CMDS+=( " -c 'no ip ospf message-digest-key ${OSPF_MSG_KEY}'" )
+         NEW_CMDS+=( "no ip ospf message-digest-key ${OSPF_MSG_KEY}" )
       fi
    fi
 
-   NEW_CMDS+=( " -c '${ENTRY}'" )
+   NEW_CMDS+=( "${ENTRY}" )
 done
 
 #
