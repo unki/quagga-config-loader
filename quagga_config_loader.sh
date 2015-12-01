@@ -3,7 +3,7 @@
 #
 # This file is part of quagga-config-loader.
 #
-# quagga-config-loader, a configuration incubator.
+# quagga-config-loader, a configuration incubator for Quagga.
 # Copyright (C) <2015> <Andreas Unterkircher>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -725,6 +725,110 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #fi
 done
 
+# walk through all commands in ${PRESTAGE_CONFIG} and check if
+# those are already in ${RUNNING_CONFIG}.
+#
+# if no, we need to issue those commands on ${DAEMON} instance.
+#
+
+mapfile -t ENTRIES < ${PRESTAGE_CONFIG}
+mapfile -t RUNNING_ENTRIES <${RUNNING_CONFIG}
+
+declare -a NEW_CMDS=()
+
+ENTERED_GROUP=
+for ENTRY in "${ENTRIES[@]}"; do
+
+   #
+   # ignore comment lines
+   #
+   if [[ "${ENTRY}" =~ ^![[:blank:]]*[[:graph:]]+ ]]; then
+      continue
+   fi
+
+   #
+   # remove leading blanks from command
+   #
+   ENTRY=${ENTRY##*( )}
+
+   #
+   # is a group-end indicate by a '!'-only-line?
+   #
+   if [ ! -z "${ENTERED_GROUP}" ] && [[ "${ENTRY}" =~ ^!$ ]]; then
+
+      #
+      # a special case for bgp - if a '!'-only-line is followed by a
+      # 'address-family ipv6' line - we have to remain in that group
+      # (router bgp XXXX) as now the IPv6 configuration will follow.
+      #
+      ((NEXT_ENTRY=ENTRY_ID+1))
+      if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
+         NEW_CMDS+=( " -c 'exit'" )
+         ENTERED_GROUP=
+      fi
+   fi
+
+   # funilly the 'banner' command is not available with vtysh. skip it. a quagga bug
+   [[ "${ENTRY}" =~ ^banner ]] && continue
+
+   # if an 'interface', rember the interface we are currently working on for later entries
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*interface[[:blank:]]([[:graph:]]+)$ ]]; then
+      IF_NAME=${BASH_REMATCH[1]}
+   fi
+
+   #
+   # if the same entry is still present in the running configuration,
+   # it's not required to reissue it. with bgpd that could lead to
+   # BGP sessions getting restarted then.
+   # but skip it only if command isn't a grouping-command (router bgp,
+   # route-map, etc.).
+   #
+   for GROUP_CMD in ${GROUPING_CMDS[@]}; do
+      if [[ "${ENTRY}" =~ ${GROUP_CMD} ]]; then
+         #
+         # if we are still in a group that gets removed and it has not been cleanly
+         # closed by a '!' line, add a '!' as separator to the REMOVE_CMD list.
+         #
+         if [ ! -z "${ENTERED_GROUP}" ]; then
+            NEW_CMDS+=( " -c 'exit'" )
+         fi
+
+         #
+         # if the previous group does not contain any commands, we can unset it
+         #
+         if [ ${#NEW_CMDS[@]} -ge 2 ]; then
+            for SUB_GROUP_CMD in ${GROUPING_CMDS[@]}; do
+               PREV2_CMD=${NEW_CMDS[-2]# -c \'}
+               PREV2_CMD=${PREV2_CMD%\'}
+               if [ "${NEW_CMDS[-1]}" == " -c 'exit'" ] && [[ "${PREV2_CMD}" =~ ${SUB_GROUP_CMD} ]]; then
+                  unset NEW_CMDS[${#NEW_CMDS[@]}-1]
+                  unset NEW_CMDS[${#NEW_CMDS[@]}-1]
+                  break
+               fi
+            done
+         fi
+         ENTERED_GROUP=${ENTRY}
+         NEW_CMDS+=( " -c '${ENTRY}'" )
+         continue 2;
+      fi
+   done
+   if in_array RUNNING_ENTRIES "${ENTRY}"; then
+      continue
+   fi
+
+   # ip ospf message-digest-key - a special case, command can not be in the
+   # running configuration. it needs to be 'no'ed first if it already exists
+   # in the running config!
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
+      OSPF_MSG_KEY=${BASH_REMATCH[1]}
+      if grep -Pzoqs "interface ${IF_NAME}\n(\s*)ip ospf message-digest-key ${OSPF_MSG_KEY}" ${RUNNING_CONFIG}; then
+         NEW_CMDS+=( " -c 'no ip ospf message-digest-key ${OSPF_MSG_KEY}'" )
+      fi
+   fi
+
+   NEW_CMDS+=( " -c '${ENTRY}'" )
+done
+
 #
 # some time may have been gone while we were parsing -
 # so check if the ${DAEMON} is still running right now.
@@ -803,118 +907,27 @@ fi
 #
 # load the new running configuration
 #
-VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
-mapfile -t ENTRIES < ${PRESTAGE_CONFIG}
-mapfile -t RUNNING_ENTRIES <${RUNNING_CONFIG}
-
-declare -a VTY_OPTS=()
-
-ENTERED_GROUP=
-for ENTRY in "${ENTRIES[@]}"; do
-
-   #
-   # ignore comment lines
-   #
-   if [[ "${ENTRY}" =~ ^![[:blank:]]*[[:graph:]]+ ]]; then
-      continue
-   fi
-
-   #
-   # remove leading blanks from command
-   #
-   ENTRY=${ENTRY##*( )}
-
-   #
-   # is a group-end indicate by a '!'-only-line?
-   #
-   if [ ! -z "${ENTERED_GROUP}" ] && [[ "${ENTRY}" =~ ^!$ ]]; then
-
-      #
-      # a special case for bgp - if a '!'-only-line is followed by a
-      # 'address-family ipv6' line - we have to remain in that group
-      # (router bgp XXXX) as now the IPv6 configuration will follow.
-      #
-      ((NEXT_ENTRY=ENTRY_ID+1))
-      if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
-         VTY_OPTS+=( " -c 'exit'" )
-         ENTERED_GROUP=
-      fi
-   fi
-
-   # funilly the 'banner' command is not available with vtysh. skip it. a quagga bug
-   [[ "${ENTRY}" =~ ^banner ]] && continue
-
-   # if an 'interface', rember the interface we are currently working on for later entries
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*interface[[:blank:]]([[:graph:]]+)$ ]]; then
-      IF_NAME=${BASH_REMATCH[1]}
-   fi
-
-   #
-   # if the same entry is still present in the running configuration,
-   # it's not required to reissue it. with bgpd that could lead to
-   # BGP sessions getting restarted then.
-   # but skip it only if command isn't a grouping-command (router bgp,
-   # route-map, etc.).
-   #
-   for GROUP_CMD in ${GROUPING_CMDS[@]}; do
-      if [[ "${ENTRY}" =~ ${GROUP_CMD} ]]; then
-         #
-         # if we are still in a group that gets removed and it has not been cleanly
-         # closed by a '!' line, add a '!' as separator to the REMOVE_CMD list.
-         #
-         if [ ! -z "${ENTERED_GROUP}" ]; then
-            VTY_OPTS+=( " -c 'exit'" )
-         fi
-
-         #
-         # if the previous group does not contain any commands, we can unset it
-         #
-         if [ ${#VTY_OPTS[@]} -ge 2 ]; then
-            for SUB_GROUP_CMD in ${GROUPING_CMDS[@]}; do
-               PREV2_CMD=${VTY_OPTS[-2]# -c \'}
-               PREV2_CMD=${PREV2_CMD%\'}
-               if [ "${VTY_OPTS[-1]}" == " -c 'exit'" ] && [[ "${PREV2_CMD}" =~ ${SUB_GROUP_CMD} ]]; then
-                  unset VTY_OPTS[${#VTY_OPTS[@]}-1]
-                  unset VTY_OPTS[${#VTY_OPTS[@]}-1]
-                  break
-               fi
-            done
-         fi
-         ENTERED_GROUP=${ENTRY}
-         VTY_OPTS+=( " -c '${ENTRY}'" )
-         continue 2;
-      fi
+if [ ${#NEW_CMDS[@]} -gt 0 ]; then
+   VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
+   for NEW_CMD in "${NEW_CMDS[@]}"; do
+      VTY_CALL+=" -c '${NEW_CMD}'"
    done
-   if in_array RUNNING_ENTRIES "${ENTRY}"; then
-      continue
-   fi
-
-   # ip ospf message-digest-key - a special case, command can not be in the
-   # running configuration. it needs to be 'no'ed first if it already exists
-   # in the running config!
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
-      OSPF_MSG_KEY=${BASH_REMATCH[1]}
-      if grep -Pzoqs "interface ${IF_NAME}\n(\s*)ip ospf message-digest-key ${OSPF_MSG_KEY}" ${RUNNING_CONFIG}; then
-         VTY_OPTS+=( " -c 'no ip ospf message-digest-key ${OSPF_MSG_KEY}'" )
-      fi
-   fi
-
-   VTY_OPTS+=( " -c '${ENTRY}'" )
-done
-
-log_msg "LOADING"
-eval ${VTY_CALL} ${VTY_OPTS[@]}
-if [ "$?" != "0" ]; then
+   log_msg "NEW_CMD"
+   eval ${VTY_CALL}
+   if [ "$?" != "0" ]; then
    log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-   exit 1
+      exit 1
+   fi
+   ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
+   if [ "$?" != "0" ]; then
+      log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+      exit 1
+   fi
 fi
 
-${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
-if [ "$?" != "0" ]; then
-   log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-   exit 1
-fi
-
+#
+# BGP, clear session (soft)
+#
 if [ "x${DAEMON}" == "xbgpd" ]; then
    ${VTYSH} -d ${DAEMON} -c 'clear ip bgp * soft' 2>&1 >/dev/null
    if [ "$?" != "0" ]; then
