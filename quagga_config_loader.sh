@@ -538,11 +538,11 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # special case for access-lists and prefix-lists. if the list get's removed
    # we need to issue only a 'no' command with the lists name as parameter.
    #
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
-      if ! grep -qs "ip access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
-         if ! in_array REMOVE_CMDS "no ip access-list ${LIST_NAME}"; then
-            REMOVE_CMDS+=( "no ip access-list ${LIST_NAME}" )
+      if ! grep -qs "access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
+         if ! in_array REMOVE_CMDS "no access-list ${LIST_NAME}"; then
+            REMOVE_CMDS+=( "no access-list ${LIST_NAME}" )
          fi
          continue;
       fi
@@ -827,19 +827,24 @@ for ENTRY in "${ENTRIES[@]}"; do
    # if new items get added to prefix- or access-list, we completely delete the
    # list and re-insert all items. so it's easier to guarantee the right order.
    #
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]](access-list)[[:blank:]]([[:graph:]]+)[[:blank:]] ]] ||
-      [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]](prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
-      LIST_TYPE=${BASH_REMATCH[1]}
-      LIST_NAME=${BASH_REMATCH[2]}
-      if in_array RUNNING_ENTRIES "ip ${LIST_TYPE} ${LIST_NAME}"; then
-         if ! in_array REMOVE_CMDS "no ip ${LIST_TYPE} ${LIST_NAME}"; then
-            REMOVE_CMDS+=( "no ip ${LIST_TYPE} ${LIST_NAME}" )
-            NEW_CMDS+=( "${ENTRY}" )
-            continue
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
+      LIST_NAME=${BASH_REMATCH[1]}
+      if in_array RUNNING_ENTRIES "access-list ${LIST_NAME}"; then
+         if ! in_array REMOVE_CMDS "no access-list ${LIST_NAME}"; then
+            REMOVE_CMDS+=( "no access-list ${LIST_NAME}" )
          fi
+         NEW_CMDS+=( "${ENTRY}" )
       fi
    fi
-
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
+      LIST_NAME=${BASH_REMATCH[1]}
+      if in_array RUNNING_ENTRIES "ip prefix-list ${LIST_NAME}"; then
+         if ! in_array REMOVE_CMDS "no ip prefix-list ${LIST_NAME}"; then
+            REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME}" )
+         fi
+         NEW_CMDS+=( "${ENTRY}" )
+      fi
+   fi
    # now finally.
    if in_array RUNNING_ENTRIES "${ENTRY}"; then
       continue
