@@ -298,18 +298,6 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
       # remove leading blanks from command
       COMMAND=${ORIG_COMMAND##*( )}
 
-      # adapt the command to look like a bash pattern match
-      #COMMAND=${COMMAND// /[[:blank:]]}
-      #COMMAND=${COMMAND//\(+([[:graph:]])\)/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//\{+([[:graph:]])\}/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//<+([[:graph:]])>/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//A.B.C.D\/M/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//A.B.C.D/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//X:X::X:X\/M/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//X:X::X:X/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//IFNAME/\([[:graph:]]+\)}
-      #COMMAND=${COMMAND//WORD/\([[:graph:]]+\)}
-
       #
       # get the first word of the command for quicker lookups in the 'no' comamnd list
       #
@@ -331,21 +319,6 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
                continue;
             fi
 
-            # remove leading blanks from command
-            #NO_COMMAND=${NO_COMMAND##*( )}
-
-            # adapt the no-command and replace all possible parameters by word 'PARAM'
-            #NO_COMMAND=${NO_COMMAND//\(+([[:graph:]])\)/PARAM}
-            #NO_COMMAND=${NO_COMMAND//\{+([[:graph:]])\}/PARAM}
-            #NO_COMMAND=${NO_COMMAND//<+([[:graph:]])>/PARAM}
-            #NO_COMMAND=${NO_COMMAND//A.B.C.D\/M/PARAM}
-            #NO_COMMAND=${NO_COMMAND//A.B.C.D/PARAM}
-            #NO_COMMAND=${NO_COMMAND//X:X::X:X\/M/PARAM}
-            #NO_COMMAND=${NO_COMMAND//X:X::X:X/PARAM}
-            #NO_COMMAND=${NO_COMMAND//IFNAME/PARAM}
-            #NO_COMMAND=${NO_COMMAND//WORD/PARAM}
-            #NO_COMMAND=${NO_COMMAND//sequence-number/PARAM}
-
             while [[ ! -z "${NO_COMMAND// /}" ]]; do
 
                #
@@ -356,7 +329,6 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
                   MATCH_ARY+=( [${COMMAND_IDX}]="${COMMAND// /[[:blank:]]}" )
                   # record the 'no' matching command into the NO_MATCH_ARY
                   NO_MATCH_ARY+=( [${COMMAND_IDX}]="${NO_COMMAND}" )
-                  # exit those loops and continue with the next command
                   #if [[ ${ORIG_COMMAND} =~ ip[[:blank:]]prefix ]]; then
                   #   #log_success_msg "For ${ORIG_COMMAND} i will use:"
                   #   #log_msg "${NO_COMMAND}"
@@ -365,6 +337,7 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
                   #   echo ${COMMAND}
                   #   echo ${NO_COMMAND}
                   #fi
+                  # exit those loops and continue with the next command
                   continue 4
                fi
 
