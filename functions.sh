@@ -162,7 +162,7 @@ check_parameters () {
             readonly DEBUG=true
             ;;
          t)
-            readonly DRYRUN=true
+            readonly DRY_RUN=true
             ;;
          *)
             log_failure_msg "Invalid parameter(s)!"
