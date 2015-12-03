@@ -63,7 +63,7 @@ if pgrep ${DAEMON} >/dev/null; then
       log_failure_msg "Can not enter 'configure terminal' for daemon '${DAEMON}' because it's locked! Exiting."
       exit 1
    fi
-   unset OUTPUT
+   unset -v 'OUTPUT'
 
    #
    # issue a 'write' command
@@ -106,7 +106,7 @@ if [ "x${DAEMON}" == "xospfd" ]; then
    if grep -qs AREAPASS ${PRESTAGE_CONFIG}; then
       OSPF_AREA_PW=$(cat /etc/quagga/ospf_area_password)
       sed -i "s/ AREAPASS$/ ${OSPF_AREA_PW}/g" ${PRESTAGE_CONFIG}
-      unset OSPF_AREA_PW
+      unset -v 'OSPF_AREA_PW'
    fi
 fi
 
@@ -206,19 +206,19 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
    # uppest level commands
    #
    if [ "x${LIST}" == "xROOT" ]; then
-      log_begin_msg "Retrieving global comands:"
+      log_begin_msg "Retrieving global commands:"
       mapfile -t COMMAND_LIST < <(${VTYSH} -d ${DAEMON} -c 'configure terminal' -c 'list' | sort)
       RETVAL=$?
    elif [ "x${LIST}" == "xinterface" ]; then
-      log_begin_msg "Retrieving 'interface' comands:"
+      log_begin_msg "Retrieving 'interface' commands:"
       mapfile -t COMMAND_LIST < <(${VTYSH} -d ${DAEMON} -c 'configure terminal' -c 'interface XLBRXL' -c 'list' -c 'quit' -c 'no interface XLBRXL' | sort)
       RETVAL=$?
    elif [ "x${LIST}" == "xroute-map" ]; then
-      log_begin_msg "Retrieving 'route-map' comands:"
+      log_begin_msg "Retrieving 'route-map' commands:"
       mapfile -t COMMAND_LIST < <(${VTYSH} -d ${DAEMON} -c 'configure terminal' -c 'route-map XLBRXL permit 10' -c 'list' -c 'quit' -c 'no route-map XLBRXL permit 10' | sort)
       RETVAL=$?
    elif [[ "${LIST}" =~ ^router ]]; then
-      log_begin_msg "Retrieving 'router' (${LIST}) comands:"
+      log_begin_msg "Retrieving 'router' (${LIST}) commands:"
       mapfile -t COMMAND_LIST < <(${VTYSH} -d ${DAEMON} -c 'configure terminal' -c ''"${LIST}"'' -c 'list' -c 'quit' | sort)
       RETVAL=$?
    else
@@ -245,7 +245,7 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]##*( )}
 
       if [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*(no[[:blank:]])*(show|clear|debug|write|line|list|disable|enable|configure|copy|terminal|ping|traceroute|telnet|ssh|start-shell|undebug|dump|username|exit|end|table|password|mpls-te|quit|address-family|continue)[[:blank:]]* ]]; then
-         unset COMMAND_LIST[COMMAND_IDX]
+         unset -v 'COMMAND_LIST[COMMAND_IDX]'
          continue
       fi
 
@@ -280,7 +280,7 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//WORD/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//sequence-number/PARAM}
       NO_COMMAND_LIST[COMMAND_IDX]="${COMMAND_LIST[COMMAND_IDX]}"
-      unset COMMAND_LIST[COMMAND_IDX]
+      unset -v 'COMMAND_LIST[COMMAND_IDX]'
 
    done
 
@@ -393,7 +393,7 @@ NO_COMMAND_LIST=$ALL_NO_COMMAND_LIST
 # if so, we need to issue a 'no' command to ${DAEMON} to remove that
 # group first before continue checking for other commands.
 #
-log_msg "Checking for group commands that get removed."
+log_begin_msg "Checking for group commands that get removed:"
 for GROUP_CMD in "${!GROUPING_CMDS[@]}"; do
 
    #
@@ -413,6 +413,7 @@ for GROUP_CMD in "${!GROUPING_CMDS[@]}"; do
 
    done
 done
+log_end_msg "${#PRE_CMDS[@]} scheduled for removal."
 
 #
 # walk through all commands in ${RUNNING_CONFIG} and check if those
@@ -423,8 +424,9 @@ done
 #
 declare -a REMOVE_CMDS=()
 
-log_msg "Parsing running configuration."
+log_begin_msg "Parsing running configuration:"
 mapfile -t ENTRIES < ${RUNNING_CONFIG}
+log_end_msg "${#ENTRIES[@]} entries."
 
 for ENTRY_ID in "${!ENTRIES[@]}"; do
 
@@ -489,7 +491,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # if command is a group command that is already scheduled for being removed,
    # we can skip it and all further entries of the group.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP}; then
+   if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}; then
       continue;
    fi
 
@@ -497,7 +499,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # now we can ignore all comment-only ('!') lines.
    #
    if [[ "${ENTRY}" =~ ^!([[:blank:]]*) ]]; then
-      unset ENTRIES[ENTRY_ID]
+      unset -v 'ENTRIES[ENTRY_ID]'
       continue;
    fi
 
@@ -506,7 +508,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # we can skip it - it doesn't get removed.
    #
    if grep -qsE "^(\s*)${ENTRY}$" ${PRESTAGE_CONFIG}; then
-      unset ENTRIES[ENTRY_ID]
+      unset -v 'ENTRIES[ENTRY_ID]'
       continue;
    fi
 
@@ -575,7 +577,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # does _not_ get removed, we need to enter that group first before we can
    # modify one of its sub commands.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP} && [ -z "${ENTERED_GROUP}" ]; then
+   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]} && [ -z "${ENTERED_GROUP}" ]; then
       REMOVE_CMDS+=( "${ENTERING_GROUP}" )
       ENTERED_GROUP=${ENTERING_GROUP}
    #
@@ -584,7 +586,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # handle.
    elif [ -z "${ENTERING_GROUP}" ] && [ ! -z "${ENTERED_GROUP}" ] &&
         [[ "${ENTERED_GROUP}" =~ ^[[:blank:]]*route-map[[:blank:]] ]]; then
-      if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP}; then
+      if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}; then
          PRE_CMDS+=( "no ${ENTERED_GROUP}" )
       fi
    fi
@@ -715,8 +717,10 @@ done
 # if no, we need to issue those commands on ${DAEMON} instance.
 #
 
+log_begin_msg "Parsing prestage configuration:"
 mapfile -t ENTRIES < ${PRESTAGE_CONFIG}
 mapfile -t RUNNING_ENTRIES <${RUNNING_CONFIG}
+log_end_msg "${#ENTRIES[@]} entries."
 
 declare -a NEW_CMDS=()
 declare -a GROUP_CMD_ARY=()
@@ -724,7 +728,9 @@ declare -a ACCESS_LIST_ARY=()
 declare -a PREFIX_LIST_ARY=()
 
 ENTERED_GROUP=
-for ENTRY in "${ENTRIES[@]}"; do
+for ENTRY_ID in "${!ENTRIES[@]}"; do
+
+   ENTRY=${ENTRIES[ENTRY_ID]}
 
    #
    # ignore comment lines
@@ -759,7 +765,7 @@ for ENTRY in "${ENTRIES[@]}"; do
    [[ "${ENTRY}" =~ ^banner ]] && continue
 
    # if an 'interface', rember the interface we are currently working on for later entries
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*interface[[:blank:]]([[:graph:]]+)$ ]]; then
+   if [[ "${ENTRY}" =~ ^interface[[:blank:]]([[:graph:]]+)$ ]]; then
       IF_NAME=${BASH_REMATCH[1]}
    fi
 
@@ -785,18 +791,6 @@ for ENTRY in "${ENTRIES[@]}"; do
             NEW_CMDS+=( "exit" )
          fi
 
-         #
-         # if the previous group does not contain any commands, we can unset it
-         #
-         if [ ${#NEW_CMDS[@]} -ge 2 ]; then
-            for SUB_GROUP_CMD in ${GROUPING_CMDS[@]}; do
-               if [ "${NEW_CMDS[-1]}" == "exit" ] && [[ "${NEW_CMDS[-2]}" =~ ${SUB_GROUP_CMD} ]]; then
-                  unset NEW_CMDS[${#NEW_CMDS[@]}-1]
-                  unset NEW_CMDS[${#NEW_CMDS[@]}-1]
-                  break
-               fi
-            done
-         fi
          ENTERED_GROUP=${ENTRY}
          NEW_CMDS+=( "${ENTRY}" )
          continue 2;
@@ -809,22 +803,33 @@ for ENTRY in "${ENTRIES[@]}"; do
    # list and re-insert all items. so it's easier to guarantee the right order.
    #
    # comments we do not need to further consider
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*(access-list)[[:blank:]]([[:graph:]]+)[[:blank:]]remark ]] ||
-      [[ "${ENTRY}" =~ ^[[:blank:]]*(ip[[:blank:]]prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]]description ]]; then
-      if ! in_array REMOVE_CMDS ^no[[:blank:]]${BASH_REMATCH[1]}[[:blank:]]${BASH_REMATCH[2]}; then
+   if [[ "${ENTRY}" =~ ^(access-list)[[:blank:]]([[:graph:]]+)[[:blank:]]remark ]] ||
+      [[ "${ENTRY}" =~ ^(ip[[:blank:]]prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]]description ]]; then
+      # if the exactly same description command is present in running-configuration, do not touch it.
+      LIST=${BASH_REMATCH[1]}
+      LIST_NAME=${BASH_REMATCH[2]}
+      if in_array RUNNING_ENTRIES ^${ENTRY// /[[:blank:]]}; then
          continue;
-      fi 
+      fi
+      if ! in_array REMOVE_CMDS ^no[[:blank:]]${LIST}[[:blank:]]${LIST_NAME}; then
+         continue;
+      fi
       NEW_CMDS+=( "${ENTRY}" )
+      continue
    fi
    #
    # access-lists
    #
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]])$ ]]; then
+   if [[ "${ENTRY}" =~ ^access-list[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]])$ ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
       LIST_MODE=${BASH_REMATCH[2]}
       LIST_TARGET=${BASH_REMATCH[3]}
       # if access-list is schedulded for removal, we can skip this line.
       if in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+         continue;
+      fi
+      # if the exactly same command is present in running-configuration, do not touch it.
+      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
          continue;
       fi
       for MODE in permit deny; do
@@ -833,38 +838,49 @@ for ENTRY in "${ENTRIES[@]}"; do
          fi
       done
       NEW_CMDS+=( "${ENTRY}" )
+      continue
    fi
    #
    #
    # prefix-lists
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]]seq[[:blank:]]([[:digit:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)$ ]]; then
+   if [[ "${ENTRY}" =~ ^ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]]seq[[:blank:]]([[:digit:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)$ ]]; then
+      #log_msg "got prefix-list: ${ENTRY}"
       LIST_NAME=${BASH_REMATCH[1]}
       LIST_SEQ=${BASH_REMATCH[2]}
       LIST_MODE=${BASH_REMATCH[3]}
       LIST_TARGET=${BASH_REMATCH[4]}
       # if access-list is schedulded for removal, we can skip this line.
       if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}; then
+         #log_msg "already scheduled for removal"
          continue;
       fi
-      # normally commands can be overwritten when specifying a sequence-number.
-      # but do it cleaner for now.
-      if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]]${LIST_SEQ}; then
-         REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}" )
+      # if the exactly same command is present in running-configuration, do not touch it.
+      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
+         #log_msg "still exists in running: ${ENTRY}"
+         continue;
       fi
+      # normally commands can be overwritten when specifying a sequence-number. but do it cleaner for now.
+      #if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]]${LIST_SEQ}; then
+      #   #log_msg "will remove existing ${LIST_NAME} ${LIST_SEQ}"
+      #   REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}" )
+      #fi
+      # if there is already the same target in our prefix-list, but possible at another position as the new one, unload it.
       for MODE in permit deny; do
          if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]][[:digit:]]+[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}; then
+            #log_msg "will remove existing ${LIST_NAME} ${MODE} ${LIST_TARGET}"
             REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
       NEW_CMDS+=( "${ENTRY}" )
+      continue
    fi
    # now finally.
-   if in_array RUNNING_ENTRIES [[:blank:]]*${ENTRY}; then
+   if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
       continue
    fi
 
    #
-   # here we know that this entry needs be issued on ${DAEMON}
+   # from here we know that this entry needs be issued on ${DAEMON}
    #
 
    #
@@ -872,7 +888,7 @@ for ENTRY in "${ENTRIES[@]}"; do
    # overwriten in the running configuration (already-exists-error).
    # it needs to be 'no'ed first.
    #
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
+   if [[ "${ENTRY}" =~ ^ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
       OSPF_MSG_KEY=${BASH_REMATCH[1]}
       if grep -Pzoqs "interface ${IF_NAME}\n(\s*)ip ospf message-digest-key ${OSPF_MSG_KEY}" ${RUNNING_CONFIG}; then
          NEW_CMDS+=( "no ip ospf message-digest-key ${OSPF_MSG_KEY}" )
@@ -883,6 +899,34 @@ for ENTRY in "${ENTRIES[@]}"; do
 done
 
 #
+# filter out empty group-statements from command list.
+# this makes loading new commands beautifuler.
+#
+SKIP_NEXT=
+if [ ${#NEW_CMDS[@]} -gt 0 ]; then
+   for NEW_CMD_ID in "${!NEW_CMDS[@]}"; do
+      if [ "x${SKIP_NEXT}" == "xtrue" ]; then
+         SKIP_NEXT=
+         unset -v 'NEW_CMDS[NEW_CMD_ID]'
+         continue
+      fi
+      NEW_CMD=${NEW_CMDS[NEW_CMD_ID]}
+      #
+      # if the new command is just an empty group, skip it.
+      #
+      # this will lead to a string "CURRENT_COMMAND NEXT_COMMAND
+      NEXT_COMMAND=${NEW_CMDS[@]:NEW_CMD_ID:2}
+      for GROUP_CMD in ${GROUPING_CMDS[@]}; do
+         if [[ "${NEW_CMD}" =~ ${GROUP_CMD} ]] && [[ "${NEXT_COMMAND}" =~ [[:blank:]]exit$ ]]; then
+            SKIP_NEXT=true
+            unset -v 'NEW_CMDS[NEW_CMD_ID]'
+            continue 2;
+         fi
+      done
+   done
+fi
+
+#
 # some time may have been gone while we were parsing -
 # so check if the ${DAEMON} is still running right now.
 #
@@ -890,10 +934,6 @@ if ! pgrep ${DAEMON} >/dev/null; then
    log_failure_msg "I'm already far on my way and suddendly ${DAEMON} is no longer active!?"
    log_failure_msg "What's going on here!? I'm stopping right now."
    exit 1
-fi
-
-if [ "x${DEBUG}" == "xtrue" ]; then
-   echo; echo; echo
 fi
 
 #####
@@ -921,22 +961,26 @@ fi
 #
 # execute all commands prior loading the new configuration
 #
+CHANGES_MADE=
 if [ ${#PRE_CMDS[@]} -gt 0 ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
+      echo
       log_msg "The following commands have been added to pre-commands list:"
    fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
+   VTY_OPTS=
    for PRE_CMD in "${PRE_CMDS[@]}"; do
       if [ "x${DRY_RUN}" == "xtrue" ]; then
          log_msg "${PRE_CMD}"
       fi
-      VTY_CALL+=" -c '${PRE_CMD}'"
+      VTY_OPTS+=" -c '${PRE_CMD}'"
    done
-   log_msg "PRE_CMD"
+   log_msg "The following command will be invoked: "
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "${VTY_CALL}"
+      log_msg "${VTY_CALL} ${VTY_OPTS}"
    else
-      eval ${VTY_CALL}
+      CHANGES_MADE=true
+      eval ${VTY_CALL} ${VTY_OPTS}
       if [ "$?" != "0" ]; then
          log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
          exit 1
@@ -951,20 +995,23 @@ fi
 
 if [ ${#REMOVE_CMDS[@]} -gt 0 ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
+      echo
       log_msg "The following commands have been added to remove-commands list:"
    fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
+   VTY_OPTS=
    for REM_CMD in "${REMOVE_CMDS[@]}"; do
       if [ "x${DRY_RUN}" == "xtrue" ]; then
          log_msg "${REM_CMD}"
       fi
-      VTY_CALL+=" -c '${REM_CMD}'"
+      VTY_OPTS+=" -c '${REM_CMD}'"
    done
-   log_msg "REMOVE_CMD"
+   log_msg "The following command will be invoked: "
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "${VTY_CALL}"
+      log_msg "${VTY_CALL} ${VTY_OPTS}"
    else
-      eval ${VTY_CALL}
+      CHANGES_MADE=true
+      eval ${VTY_CALL} ${VTY_OPTS}
       if [ "$?" != "0" ]; then
          log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
          exit 1
@@ -982,20 +1029,23 @@ fi
 #
 if [ ${#NEW_CMDS[@]} -gt 0 ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
+      echo
       log_msg "The following commands have been added to new-commands list:"
    fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
+   VTY_OPTS=
    for NEW_CMD in "${NEW_CMDS[@]}"; do
       if [ "x${DRY_RUN}" == "xtrue" ]; then
          log_msg "${NEW_CMD}"
       fi
-      VTY_CALL+=" -c '${NEW_CMD}'"
+      VTY_OPTS+=" -c '${NEW_CMD}'"
    done
-   log_msg "NEW_CMD"
+   log_msg "The following command will be invoked: "
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "${VTY_CALL}"
+      log_msg "${VTY_CALL} ${VTY_OPTS}"
    else
-      eval ${VTY_CALL}
+      CHANGES_MADE=true
+      eval ${VTY_CALL} ${VTY_OPTS}
       if [ "$?" != "0" ]; then
       log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
          exit 1
@@ -1006,6 +1056,10 @@ if [ ${#NEW_CMDS[@]} -gt 0 ]; then
          exit 1
       fi
    fi
+fi
+
+if [ "x${CHANGES_MADE}" != "xtrue" ]; then
+   log_msg "No changes were made."
 fi
 
 #
