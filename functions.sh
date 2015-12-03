@@ -148,7 +148,7 @@ check_parameters () {
       exit 0
    fi
 
-   while getopts :hd:v OPTS; do
+   while getopts :hd:vt OPTS; do
       ARGSPARSED=1
       case $OPTS in
          h)
@@ -160,6 +160,9 @@ check_parameters () {
             ;;
          v)
             readonly DEBUG=true
+            ;;
+         t)
+            readonly DRYRUN=true
             ;;
          *)
             log_failure_msg "Invalid parameter(s)!"
@@ -189,7 +192,8 @@ show_help ()
 {
 echo $0
 echo
-echo "  -v     ... be verbose"
 echo "  -d arg ... quagga daemon (ospfd, bgpd, zebra)"
+echo "  -v     ... be verbose"
+echo "  -t     ... dry-run (no changes are made)"
 echo
 }
