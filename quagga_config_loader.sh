@@ -535,7 +535,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #
    # special case for BGP - if neighbor already exists and has a peer-group or a
    # remote-as set, but now joins another peer-group - then that neighbor needs
-   # to be deconfigured.
+   # to be deconfigured first.
    #
    # has the neighbor currently a remote-as or peer-group defined.
    #
@@ -719,6 +719,9 @@ mapfile -t ENTRIES < ${PRESTAGE_CONFIG}
 mapfile -t RUNNING_ENTRIES <${RUNNING_CONFIG}
 
 declare -a NEW_CMDS=()
+declare -a GROUP_CMD_ARY=()
+declare -a ACCESS_LIST_ARY=()
+declare -a PREFIX_LIST_ARY=()
 
 ENTERED_GROUP=
 for ENTRY in "${ENTRIES[@]}"; do
@@ -800,26 +803,60 @@ for ENTRY in "${ENTRIES[@]}"; do
       fi
    done
    #
-   # if new items get added to prefix- or access-list, we completely delete the
+   # if new items get added to prefix- or access-list.
+   # - check if there is already a list-entry with the same sequence-number
+   # - check if there is already a list-entry with the same IP/network-address
    # list and re-insert all items. so it's easier to guarantee the right order.
    #
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
-      LIST_NAME=${BASH_REMATCH[1]}
-      if in_array RUNNING_ENTRIES "access-list ${LIST_NAME}"; then
-         if ! in_array REMOVE_CMDS "no access-list ${LIST_NAME}"; then
-            REMOVE_CMDS+=( "no access-list ${LIST_NAME}" )
-         fi
-         NEW_CMDS+=( "${ENTRY}" )
-      fi
+   # comments we do not need to further consider
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*(access-list)[[:blank:]]([[:graph:]]+)[[:blank:]]remark ]] ||
+      [[ "${ENTRY}" =~ ^[[:blank:]]*(ip[[:blank:]]prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]]description ]]; then
+      if ! in_array REMOVE_CMDS "no ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"; then
+         continue;
+      fi 
+      NEW_CMDS+=( "${ENTRY}" )
    fi
-   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
+   #
+   # access-lists
+   #
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]])$ ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
-      if in_array RUNNING_ENTRIES "ip prefix-list ${LIST_NAME}"; then
-         if ! in_array REMOVE_CMDS "no ip prefix-list ${LIST_NAME}"; then
-            REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME}" )
-         fi
-         NEW_CMDS+=( "${ENTRY}" )
+      LIST_MODE=${BASH_REMATCH[2]}
+      LIST_TARGET=${BASH_REMATCH[3]}
+      # if access-list is schedulded for removal, we can skip this line.
+      if in_array REMOVE_CMDS "no access-list ${LIST_NAME}"; then
+         continue;
       fi
+      for MODE in permit deny; do
+         if in_array RUNNING_ENTRIES "access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}"; then
+            REMOVE_CMDS+=( "no access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
+         fi
+      done
+      NEW_CMDS+=( "${ENTRY}" )
+   fi
+   #
+   #
+   # prefix-lists
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]]seq[[:blank:]]([[:digit:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)$ ]]; then
+      LIST_NAME=${BASH_REMATCH[1]}
+      LIST_SEQ=${BASH_REMATCH[2]}
+      LIST_MODE=${BASH_REMATCH[3]}
+      LIST_TARGET=${BASH_REMATCH[4]}
+      # if access-list is schedulded for removal, we can skip this line.
+      if in_array REMOVE_CMDS "no ip prefix-list ${LIST_NAME}"; then
+         continue;
+      fi
+      # normally commands can be overwritten when specifying a sequence-number.
+      # but do it cleaner for now.
+      if in_array RUNNING_ENTRIES "ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}"; then
+         REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}" )
+      fi
+      for MODE in permit deny; do
+         if in_array RUNNING_ENTRIES "ip prefix-list ${LIST_NAME} seq [[:digit:]]+ ${MODE} ${LIST_TARGET}"; then
+            REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
+         fi
+      done
+      NEW_CMDS+=( "${ENTRY}" )
    fi
    # now finally.
    if in_array RUNNING_ENTRIES "${ENTRY}"; then
