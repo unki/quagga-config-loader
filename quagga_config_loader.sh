@@ -115,6 +115,10 @@ fi
 if [ -e ${RUNNING_CONFIG} ]; then
    if diff --ignore-matching-lines='^!' ${RUNNING_CONFIG} ${PRESTAGE_CONFIG} >/dev/null; then
       # running config matches puppet generated config, no action required
+      if [ "x${DEBUG}" == "xtrue" ]; then
+         log_msg "Running-configuration (${RUNNING_CONFIG}) matches prestage-configuration (${PRESTAGE_CONFIG})."
+         log_msg "No action required. Exiting."
+      fi
       exit 0
    fi
 fi
