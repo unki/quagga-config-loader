@@ -1008,19 +1008,19 @@ CHANGES_MADE=
 if [ ${#PRE_CMDS[@]} -gt 0 ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
       echo
-      log_msg "The following commands have been added to pre-commands list:"
+      log_msg "DRY-RUN: the following commands have been added to pre-commands list:"
    fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
    VTY_OPTS=
    for PRE_CMD in "${PRE_CMDS[@]}"; do
       if [ "x${DRY_RUN}" == "xtrue" ]; then
-         log_msg "${PRE_CMD}"
+         log_msg "DRY-RUN: ${PRE_CMD}"
       fi
       VTY_OPTS+=" -c '${PRE_CMD}'"
    done
    log_msg "The following command will be invoked: "
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "${VTY_CALL} ${VTY_OPTS}"
+      log_msg "DRY-RUN: ${VTY_CALL} ${VTY_OPTS}"
    else
       CHANGES_MADE=true
       eval ${VTY_CALL} ${VTY_OPTS}
@@ -1039,19 +1039,19 @@ fi
 if [ ${#REMOVE_CMDS[@]} -gt 0 ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
       echo
-      log_msg "The following commands have been added to remove-commands list:"
+      log_msg "DRY-RUN: The following commands have been added to remove-commands list:"
    fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
    VTY_OPTS=
    for REM_CMD in "${REMOVE_CMDS[@]}"; do
       if [ "x${DRY_RUN}" == "xtrue" ]; then
-         log_msg "${REM_CMD}"
+         log_msg "DRY-RUN: ${REM_CMD}"
       fi
       VTY_OPTS+=" -c '${REM_CMD}'"
    done
    log_msg "The following command will be invoked: "
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "${VTY_CALL} ${VTY_OPTS}"
+      log_msg "DRY-RUN: ${VTY_CALL} ${VTY_OPTS}"
    else
       CHANGES_MADE=true
       eval ${VTY_CALL} ${VTY_OPTS}
@@ -1073,19 +1073,19 @@ fi
 if [ ${#NEW_CMDS[@]} -gt 0 ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
       echo
-      log_msg "The following commands have been added to new-commands list:"
+      log_msg "DRY-RUN: The following commands have been added to new-commands list:"
    fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
    VTY_OPTS=
    for NEW_CMD in "${NEW_CMDS[@]}"; do
       if [ "x${DRY_RUN}" == "xtrue" ]; then
-         log_msg "${NEW_CMD}"
+         log_msg "DRY-RUN: ${NEW_CMD}"
       fi
       VTY_OPTS+=" -c '${NEW_CMD}'"
    done
    log_msg "The following command will be invoked: "
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "${VTY_CALL} ${VTY_OPTS}"
+      log_msg "DRY-RUN: ${VTY_CALL} ${VTY_OPTS}"
    else
       CHANGES_MADE=true
       eval ${VTY_CALL} ${VTY_OPTS}
@@ -1101,7 +1101,7 @@ if [ ${#NEW_CMDS[@]} -gt 0 ]; then
    fi
 fi
 
-if [ "x${CHANGES_MADE}" != "xtrue" ]; then
+if [ "x${DRY_RUN}" != "xtrue" ] && [ "x${CHANGES_MADE}" != "xtrue" ]; then
    log_msg "No changes were made."
 fi
 
@@ -1110,7 +1110,7 @@ fi
 #
 if [ "x${DAEMON}" == "xbgpd" ]; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
-      log_msg "Would issue 'clear ip bgp * soft' now."
+      log_msg "DRY-RUN: clear ip bgp * soft"
    else
       ${VTYSH} -d ${DAEMON} -c 'clear ip bgp * soft' 2>&1 >/dev/null
       if [ "$?" != "0" ]; then
