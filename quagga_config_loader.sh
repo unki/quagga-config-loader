@@ -532,6 +532,14 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          fi
          continue;
       fi
+   elif [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
+      LIST_NAME=${BASH_REMATCH[1]}
+      if ! grep -qs "ip as-path access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+            REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME}" )
+         fi
+         continue;
+      fi
    fi
 
    #
@@ -841,15 +849,50 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       continue
    fi
    #
+   # as-path access-lists
+   #
+   if [[ "${ENTRY}" =~ ^ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:print:]]+)$ ]]; then
+      LIST_NAME=${BASH_REMATCH[1]}
+      LIST_MODE=${BASH_REMATCH[2]}
+      LIST_TARGET=${BASH_REMATCH[3]}
+      # as as-path can contain regular expression characters, we need to escape them
+      ENTRY_ESCAPED=${ENTRY}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\*/\\\*}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\./\\\.}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\+/\\\+}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\?/\\\?}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\^/\\\^}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\$/\\\$}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\[/\\\[}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\]/\\\]}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\(/\\\(}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\)/\\\)}
+      # if as-path access-list is schedulded for removal, we can skip this line.
+      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+         continue;
+      fi
+      # if the exactly same command is present in running-configuration, do not touch it.
+      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY_ESCAPED// /[[:blank:]]}; then
+         continue;
+      fi
+      for MODE in permit deny; do
+         if in_array RUNNING_ENTRIES ^ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}; then
+            REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
+         fi
+      done
+      NEW_CMDS+=( "${ENTRY}" )
+      continue
+   fi
    #
    # prefix-lists
+   #
    if [[ "${ENTRY}" =~ ^ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]]seq[[:blank:]]([[:digit:]]+)[[:blank:]]([[:graph:]]+)[[:blank:]]([[:graph:]]+)$ ]]; then
       #log_msg "got prefix-list: ${ENTRY}"
       LIST_NAME=${BASH_REMATCH[1]}
       LIST_SEQ=${BASH_REMATCH[2]}
       LIST_MODE=${BASH_REMATCH[3]}
       LIST_TARGET=${BASH_REMATCH[4]}
-      # if access-list is schedulded for removal, we can skip this line.
+      # if prefix-list is schedulded for removal, we can skip this line.
       if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}; then
          #log_msg "already scheduled for removal"
          continue;
