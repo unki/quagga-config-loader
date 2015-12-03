@@ -1,5 +1,19 @@
 #
-# found at https://raymii.org/s/snippets/Bash_Bits_Check_If_Item_Is_In_Array.html
+# This file is part of quagga-config-loader.
+# https://github.com/unki/quagga-config-loader
+#
+# quagga-config-loader, a configuration incubator for Quagga.
+# Copyright (C) <2015> <Andreas Unterkircher>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
 #
 
 # Colors
@@ -7,6 +21,7 @@ readonly COLOR_RESTORE='\e[0m'
 readonly COLOR_GREEN='\e[0;32m'
 readonly COLOR_RED='\e[0;31m'
 
+# found at https://raymii.org/s/snippets/Bash_Bits_Check_If_Item_Is_In_Array.html
 in_array () {
 
     local -a 'haystack=("${'"$1"'[@]}")'
