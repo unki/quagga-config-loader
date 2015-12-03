@@ -111,7 +111,7 @@ if [ "x${DAEMON}" == "xospfd" ]; then
 fi
 
 #
-# check if actions have to be actually taken
+# check if actions have actually to be taken
 #
 if [ -e ${RUNNING_CONFIG} ]; then
    if diff --ignore-matching-lines='^!' ${RUNNING_CONFIG} ${PRESTAGE_CONFIG} >/dev/null; then
@@ -139,8 +139,8 @@ if [ "x${?}" != "x0" ]; then
 fi
 
 #
-# the easy part - if ${DAEMON} isn't running, we just replace the running configuration
-# with the prestaged one and exit.
+# the easy part - if ${DAEMON} isn't running, we just go ahead and
+# replace the ${RUNNING_CONFIG} with ${PRESTAGE_CONFIG} and exit.
 #
 if ! pgrep ${DAEMON} >/dev/null; then
    if [ "x${DRY_RUN}" == "xtrue" ]; then
@@ -156,7 +156,9 @@ fi
 
 ################
 #
-# the harder part, act daemon specific - unload vanished configurations and reload
+# the harder part, act ${DAEMON} specific.
+#  - unload vanished configuration lines
+#  - load new configuration lines
 #
 ################
 
