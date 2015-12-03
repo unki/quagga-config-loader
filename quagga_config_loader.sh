@@ -138,6 +138,10 @@ fi
 # with the prestaged one and exit.
 #
 if ! pgrep ${DAEMON} >/dev/null; then
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg cp ${PRESTAGE_CONFIG} ${RUNNING_CONFIG}
+      exit 0
+   fi
    [ -e ${RUNNING_CONFIG} ] && rm ${RUNNING_CONFIG}
    cp ${PRESTAGE_CONFIG} ${RUNNING_CONFIG}
    chown quagga.quagga ${RUNNING_CONFIG}
@@ -896,38 +900,58 @@ fi
 # execute all commands prior loading the new configuration
 #
 if [ ${#PRE_CMDS[@]} -gt 0 ]; then
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "The following commands have been added to pre-commands list:"
+   fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
    for PRE_CMD in "${PRE_CMDS[@]}"; do
+      if [ "x${DRY_RUN}" == "xtrue" ]; then
+         log_msg "${PRE_CMD}"
+      fi
       VTY_CALL+=" -c '${PRE_CMD}'"
    done
    log_msg "PRE_CMD"
-   eval ${VTY_CALL}
-   if [ "$?" != "0" ]; then
-      log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
-   fi
-   ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
-   if [ "$?" != "0" ]; then
-      log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "${VTY_CALL}"
+   else
+      eval ${VTY_CALL}
+      if [ "$?" != "0" ]; then
+         log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+         exit 1
+      fi
+      ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
+      if [ "$?" != "0" ]; then
+         log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+         exit 1
+      fi
    fi
 fi
 
 if [ ${#REMOVE_CMDS[@]} -gt 0 ]; then
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "The following commands have been added to remove-commands list:"
+   fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
    for REM_CMD in "${REMOVE_CMDS[@]}"; do
+      if [ "x${DRY_RUN}" == "xtrue" ]; then
+         log_msg "${REM_CMD}"
+      fi
       VTY_CALL+=" -c '${REM_CMD}'"
    done
    log_msg "REMOVE_CMD"
-   eval ${VTY_CALL}
-   if [ "$?" != "0" ]; then
-      log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
-   fi
-   ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
-   if [ "$?" != "0" ]; then
-      log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "${VTY_CALL}"
+   else
+      eval ${VTY_CALL}
+      if [ "$?" != "0" ]; then
+         log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+         exit 1
+      fi
+      ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
+      if [ "$?" != "0" ]; then
+         log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+         exit 1
+      fi
    fi
 fi
 
@@ -935,20 +959,30 @@ fi
 # load the new running configuration
 #
 if [ ${#NEW_CMDS[@]} -gt 0 ]; then
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "The following commands have been added to new-commands list:"
+   fi
    VTY_CALL="${VTYSH} -E -d ${DAEMON} -c 'configure terminal'"
    for NEW_CMD in "${NEW_CMDS[@]}"; do
+      if [ "x${DRY_RUN}" == "xtrue" ]; then
+         log_msg "${NEW_CMD}"
+      fi
       VTY_CALL+=" -c '${NEW_CMD}'"
    done
    log_msg "NEW_CMD"
-   eval ${VTY_CALL}
-   if [ "$?" != "0" ]; then
-   log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
-   fi
-   ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
-   if [ "$?" != "0" ]; then
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "${VTY_CALL}"
+   else
+      eval ${VTY_CALL}
+      if [ "$?" != "0" ]; then
       log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
+         exit 1
+      fi
+      ${VTYSH} -d ${DAEMON} -c "write" 2>&1 >/dev/null
+      if [ "$?" != "0" ]; then
+         log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+         exit 1
+      fi
    fi
 fi
 
@@ -956,9 +990,13 @@ fi
 # BGP, clear session (soft)
 #
 if [ "x${DAEMON}" == "xbgpd" ]; then
-   ${VTYSH} -d ${DAEMON} -c 'clear ip bgp * soft' 2>&1 >/dev/null
-   if [ "$?" != "0" ]; then
-      log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
-      exit 1
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
+      log_msg "Would issue 'clear ip bgp * soft' now."
+   else
+      ${VTYSH} -d ${DAEMON} -c 'clear ip bgp * soft' 2>&1 >/dev/null
+      if [ "$?" != "0" ]; then
+         log_failure_msg "vtysh returned non-zero for $DAEMON. please check manually."
+         exit 1
+      fi
    fi
 fi
