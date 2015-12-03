@@ -25,9 +25,8 @@ readonly COLOR_RED='\e[0;31m'
 in_array () {
 
     local -a 'haystack=("${'"$1"'[@]}")'
-    local needle="${2}"
     for i in "${haystack[@]}"; do
-        if [[ "${i}" =~ "${needle}" ]]; then
+        if [[ "${i}" =~ ${2} ]]; then
             return 0
         fi
     done
