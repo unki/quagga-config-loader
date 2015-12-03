@@ -489,7 +489,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # if command is a group command that is already scheduled for being removed,
    # we can skip it and all further entries of the group.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS "no ${ENTERING_GROUP}"; then
+   if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP}; then
       continue;
    fi
 
@@ -517,7 +517,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
       if ! grep -qs "access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
-         if ! in_array REMOVE_CMDS "no access-list ${LIST_NAME}"; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
             REMOVE_CMDS+=( "no access-list ${LIST_NAME}" )
          fi
          continue;
@@ -525,7 +525,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    elif [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
       if ! grep -qs "ip prefix-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
-         if ! in_array REMOVE_CMDS "no ip prefix-list ${LIST_NAME}"; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}; then
             REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME}" )
          fi
          continue;
@@ -551,7 +551,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          #
          # does PRESTAGE_CONFIG indicate neighbor will join a peer-group
          #
-         if ! in_array ENTRIES "[[:blank:]]*neighbor[[:blank:]]${NEIGHBOR}[[:blank:]]peer-group[[:blank:]]" &&
+         if ! in_array ENTRIES [[:blank:]]*neighbor[[:blank:]]${NEIGHBOR}[[:blank:]]peer-group[[:blank:]] &&
             grep -qsE "^(\s*)neighbor\s${NEIGHBOR}\speer-group\s" ${PRESTAGE_CONFIG}; then
             REMOVE_CMDS+=( "no neighbor ${NEIGHBOR}" )
          fi
@@ -575,7 +575,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # does _not_ get removed, we need to enter that group first before we can
    # modify one of its sub commands.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS "no ${ENTERING_GROUP}" && [ -z "${ENTERED_GROUP}" ]; then
+   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP} && [ -z "${ENTERED_GROUP}" ]; then
       REMOVE_CMDS+=( "${ENTERING_GROUP}" )
       ENTERED_GROUP=${ENTERING_GROUP}
    #
@@ -584,7 +584,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # handle.
    elif [ -z "${ENTERING_GROUP}" ] && [ ! -z "${ENTERED_GROUP}" ] &&
         [[ "${ENTERED_GROUP}" =~ ^[[:blank:]]*route-map[[:blank:]] ]]; then
-      if ! in_array PRE_CMDS "no ${ENTERED_GROUP}"; then
+      if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP}; then
          PRE_CMDS+=( "no ${ENTERED_GROUP}" )
       fi
    fi
@@ -670,7 +670,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]([[:graph:]]+)[[:blank:]]remote-as[[:blank:]][[:digit:]]+$ ]] || \
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]([[:graph:]]+)$ ]]; then
          BGP_PEER_REMOVAL=${BASH_REMATCH[1]}
-         if ! in_array REMOVE_CMDS "no neighbor ${BGP_PEER_REMOVAL}"; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}; then
             REMOVE_CMDS+=( "no neighbor ${BGP_PEER_REMOVAL}" )
          fi
          break
@@ -811,7 +811,7 @@ for ENTRY in "${ENTRIES[@]}"; do
    # comments we do not need to further consider
    if [[ "${ENTRY}" =~ ^[[:blank:]]*(access-list)[[:blank:]]([[:graph:]]+)[[:blank:]]remark ]] ||
       [[ "${ENTRY}" =~ ^[[:blank:]]*(ip[[:blank:]]prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]]description ]]; then
-      if ! in_array REMOVE_CMDS "no ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"; then
+      if ! in_array REMOVE_CMDS ^no[[:blank:]]${BASH_REMATCH[1]}[[:blank:]]${BASH_REMATCH[2]}; then
          continue;
       fi 
       NEW_CMDS+=( "${ENTRY}" )
@@ -824,11 +824,11 @@ for ENTRY in "${ENTRIES[@]}"; do
       LIST_MODE=${BASH_REMATCH[2]}
       LIST_TARGET=${BASH_REMATCH[3]}
       # if access-list is schedulded for removal, we can skip this line.
-      if in_array REMOVE_CMDS "no access-list ${LIST_NAME}"; then
+      if in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
          continue;
       fi
       for MODE in permit deny; do
-         if in_array RUNNING_ENTRIES "access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}"; then
+         if in_array RUNNING_ENTRIES ^access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}; then
             REMOVE_CMDS+=( "no access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
@@ -843,23 +843,23 @@ for ENTRY in "${ENTRIES[@]}"; do
       LIST_MODE=${BASH_REMATCH[3]}
       LIST_TARGET=${BASH_REMATCH[4]}
       # if access-list is schedulded for removal, we can skip this line.
-      if in_array REMOVE_CMDS "no ip prefix-list ${LIST_NAME}"; then
+      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}; then
          continue;
       fi
       # normally commands can be overwritten when specifying a sequence-number.
       # but do it cleaner for now.
-      if in_array RUNNING_ENTRIES "ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}"; then
+      if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]]${LIST_SEQ}; then
          REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}" )
       fi
       for MODE in permit deny; do
-         if in_array RUNNING_ENTRIES "ip prefix-list ${LIST_NAME} seq [[:digit:]]+ ${MODE} ${LIST_TARGET}"; then
+         if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]][[:digit:]]+[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}; then
             REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
       NEW_CMDS+=( "${ENTRY}" )
    fi
    # now finally.
-   if in_array RUNNING_ENTRIES "${ENTRY}"; then
+   if in_array RUNNING_ENTRIES [[:blank:]]*${ENTRY}; then
       continue
    fi
 
