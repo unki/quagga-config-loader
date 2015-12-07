@@ -82,12 +82,18 @@ log_failure_msg () {
 }
 
 check_privileges () {
-   if [[ ( -z "${LOGNAME}" || "${LOGNAME}" != "root" ) && \
-      ( -z "${USERNAME}" || "${USERNAME}" != "root" ) ]]; then
-
-      log_failure_msg "`basename $0` must be invoked with root privileges!"
-      exit 1
+   if [ ! -z "${LOGNAME}" ] && [ "${LOGNAME}" == "root" ]; then
+      exit 0
    fi
+   if [ ! -z "${USERNAME}" ] && [ "${USERNAME}" == "root" ]; then
+      exit 0
+   fi
+   if [ "$(id -un)" == "root" ]; then
+      exit 0
+   fi
+
+   log_failure_msg "`basename $0` must be invoked with root privileges!"
+   exit 1
 }
 
 check_requirements () {
