@@ -83,13 +83,13 @@ log_failure_msg () {
 
 check_privileges () {
    if [ ! -z "${LOGNAME}" ] && [ "${LOGNAME}" == "root" ]; then
-      exit 0
+      return
    fi
    if [ ! -z "${USERNAME}" ] && [ "${USERNAME}" == "root" ]; then
-      exit 0
+      return
    fi
    if [ "$(id -un)" == "root" ]; then
-      exit 0
+      return
    fi
 
    log_failure_msg "`basename $0` must be invoked with root privileges!"
