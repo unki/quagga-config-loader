@@ -766,6 +766,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
          NEW_CMDS+=( "exit" )
          ENTERED_GROUP=
+         continue
       fi
    fi
 
@@ -916,6 +917,38 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       done
       NEW_CMDS+=( "${ENTRY}" )
       continue
+   fi
+   #
+   # if we are in a group, we need to find out if running config
+   # contains the exactly same entry in the exactly same group.
+   #
+   if [ ! -z "${ENTERED_GROUP}" ]; then
+      #
+      # if group hasn't exist before, we can continue
+      #
+      if ! in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTERED_GROUP// /[[:blank:]]}; then
+      #if ! grep -qsE "^(\s*)${ENTERED_GROUP}" ${RUNNING_CONFIG}; then
+         NEW_CMDS+=( "${ENTRY}" )
+         continue;
+      fi
+      #
+      # retrieve the group stance via awk
+      #
+      RUNNING_CONFIG_GROUP_SECTION=$(awk "/^${ENTERED_GROUP}/,/\!/" ${RUNNING_CONFIG})
+      if [ -z "${RUNNING_CONFIG_GROUP_SECTION}" ]; then
+         log_failure_msg "awk returned no group section for group ${ENTERED_GROUP}!"
+         exit 1
+      fi
+      #
+      # does the group section contain our $ENTRY
+      #
+      mapfile -t GROUP_ARY <<<"${RUNNING_CONFIG_GROUP_SECTION}"
+      if ! in_array GROUP_ARY ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
+         NEW_CMDS+=( "${ENTRY}" )
+         continue;
+      fi
+      unset -v "RUNNING_CONFIG_GROUP_SECTION"
+      unset -v "GROUP_ARY"
    fi
    # now finally.
    if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
