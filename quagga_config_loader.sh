@@ -893,7 +893,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       LIST_MODE=${BASH_REMATCH[3]}
       LIST_TARGET=${BASH_REMATCH[4]}
       # if prefix-list is schedulded for removal, we can skip this line.
-      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}; then
+      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}$; then
          #log_msg "already scheduled for removal"
          continue;
       fi
