@@ -833,7 +833,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       LIST_MODE=${BASH_REMATCH[2]}
       LIST_TARGET=${BASH_REMATCH[3]}
       # if access-list is schedulded for removal, we can skip this line.
-      if in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+      if in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
          continue;
       fi
       # if the exactly same command is present in running-configuration, do not touch it.
@@ -868,7 +868,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\(/\\\(}
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\)/\\\)}
       # if as-path access-list is schedulded for removal, we can skip this line.
-      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
          continue;
       fi
       # if the exactly same command is present in running-configuration, do not touch it.
