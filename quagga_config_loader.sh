@@ -491,7 +491,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # if command is a group command that is already scheduled for being removed,
    # we can skip it and all further entries of the group.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}; then
+   if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}$; then
       continue;
    fi
 
@@ -519,7 +519,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
       if ! grep -qs "access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
-         if ! in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
             REMOVE_CMDS+=( "no access-list ${LIST_NAME}" )
          fi
          continue;
@@ -527,7 +527,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    elif [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
       if ! grep -qs "ip prefix-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
-         if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}$; then
             REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME}" )
          fi
          continue;
@@ -535,7 +535,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    elif [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
       if ! grep -qs "ip as-path access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
-         if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
             REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME}" )
          fi
          continue;
@@ -561,7 +561,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          #
          # does PRESTAGE_CONFIG indicate neighbor will join a peer-group
          #
-         if ! in_array ENTRIES [[:blank:]]*neighbor[[:blank:]]${NEIGHBOR}[[:blank:]]peer-group[[:blank:]] &&
+         if ! in_array ENTRIES ^[[:blank:]]*neighbor[[:blank:]]${NEIGHBOR}[[:blank:]]peer-group[[:blank:]] &&
             grep -qsE "^(\s*)neighbor\s${NEIGHBOR}\speer-group\s" ${PRESTAGE_CONFIG}; then
             REMOVE_CMDS+=( "no neighbor ${NEIGHBOR}" )
          fi
@@ -585,7 +585,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # does _not_ get removed, we need to enter that group first before we can
    # modify one of its sub commands.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]} && [ -z "${ENTERED_GROUP}" ]; then
+   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}$ && [ -z "${ENTERED_GROUP}" ]; then
       REMOVE_CMDS+=( "${ENTERING_GROUP}" )
       ENTERED_GROUP=${ENTERING_GROUP}
    #
@@ -594,7 +594,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # handle.
    elif [ -z "${ENTERING_GROUP}" ] && [ ! -z "${ENTERED_GROUP}" ] &&
         [[ "${ENTERED_GROUP}" =~ ^[[:blank:]]*route-map[[:blank:]] ]]; then
-      if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}; then
+      if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}$; then
          PRE_CMDS+=( "no ${ENTERED_GROUP}" )
       fi
    fi
@@ -680,7 +680,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]([[:graph:]]+)[[:blank:]]remote-as[[:blank:]][[:digit:]]+$ ]] || \
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]([[:graph:]]+)$ ]]; then
          BGP_PEER_REMOVAL=${BASH_REMATCH[1]}
-         if ! in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}; then
+         if ! in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}$; then
             REMOVE_CMDS+=( "no neighbor ${BGP_PEER_REMOVAL}" )
          fi
          break
@@ -814,13 +814,13 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # comments we do not need to further consider
    if [[ "${ENTRY}" =~ ^(access-list)[[:blank:]]([[:graph:]]+)[[:blank:]]remark ]] ||
       [[ "${ENTRY}" =~ ^(ip[[:blank:]]prefix-list)[[:blank:]]([[:graph:]]+)[[:blank:]]description ]]; then
-      # if the exactly same description command is present in running-configuration, do not touch it.
       LIST=${BASH_REMATCH[1]}
       LIST_NAME=${BASH_REMATCH[2]}
-      if in_array RUNNING_ENTRIES ^${ENTRY// /[[:blank:]]}; then
+      # if the exactly same description command is present in running-configuration, do not touch it.
+      if in_array RUNNING_ENTRIES ^${ENTRY// /[[:blank:]]}$; then
          continue;
       fi
-      if ! in_array REMOVE_CMDS ^no[[:blank:]]${LIST}[[:blank:]]${LIST_NAME}; then
+      if ! in_array REMOVE_CMDS ^no[[:blank:]]${LIST}[[:blank:]]${LIST_NAME}$; then
          continue;
       fi
       NEW_CMDS+=( "${ENTRY}" )
@@ -838,7 +838,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          continue;
       fi
       # if the exactly same command is present in running-configuration, do not touch it.
-      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
+      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
          continue;
       fi
       for MODE in permit deny; do
@@ -873,11 +873,11 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          continue;
       fi
       # if the exactly same command is present in running-configuration, do not touch it.
-      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY_ESCAPED// /[[:blank:]]}; then
+      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY_ESCAPED// /[[:blank:]]}$; then
          continue;
       fi
       for MODE in permit deny; do
-         if in_array RUNNING_ENTRIES ^ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}; then
+         if in_array RUNNING_ENTRIES ^ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
             REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
@@ -899,7 +899,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          continue;
       fi
       # if the exactly same command is present in running-configuration, do not touch it.
-      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
+      if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
          #log_msg "still exists in running: ${ENTRY}"
          continue;
       fi
@@ -910,7 +910,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #fi
       # if there is already the same target in our prefix-list, but possible at another position as the new one, unload it.
       for MODE in permit deny; do
-         if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]][[:digit:]]+[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}; then
+         if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]][[:digit:]]+[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
             #log_msg "will remove existing ${LIST_NAME} ${MODE} ${LIST_TARGET}"
             REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
@@ -951,7 +951,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       unset -v "GROUP_ARY"
    fi
    # now finally.
-   if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}; then
+   if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
       continue
    fi
 
