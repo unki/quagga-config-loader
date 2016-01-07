@@ -858,6 +858,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       LIST_TARGET=${BASH_REMATCH[3]}
       # as as-path can contain regular expression characters, we need to escape them
       ENTRY_ESCAPED=${ENTRY}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\|/\\\|}
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\*/\\\*}
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\./\\\.}
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\+/\\\+}
@@ -877,7 +878,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          continue;
       fi
       for MODE in permit deny; do
-         if in_array RUNNING_ENTRIES ^ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
+         if in_array RUNNING_ENTRIES ^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
             REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
