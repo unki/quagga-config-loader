@@ -557,24 +557,26 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       # if the neighbor is currently _not_ member of a peer-group
       #
       if [ -z "${PEER_GROUP}" ]; then
-         #echo "Handling remote-as for ${NEIGHBOR}"
          #
-         # does PRESTAGE_CONFIG indicate neighbor will join a peer-group
+         # does PRESTAGE_CONFIG indicate neighbor wasn't in a peer-group before
+         # and will now join a peer-group
          #
          if ! in_array ENTRIES ^[[:blank:]]*neighbor[[:blank:]]${NEIGHBOR}[[:blank:]]peer-group[[:blank:]] &&
             grep -qsE "^(\s*)neighbor\s${NEIGHBOR}\speer-group\s" ${PRESTAGE_CONFIG}; then
+            REMOVE_CMDS+=( "${ENTERING_GROUP}" )
             REMOVE_CMDS+=( "no neighbor ${NEIGHBOR}" )
+            REMOVE_CMDS+=( "!" )
          fi
       else
-         #echo "Handling peer-group for ${NEIGHBOR}"
          #
-         # does PRESTAGE_CONFIG indicate neighbor will join _another_ peer-group
+         # does PRESTAGE_CONFIG indicate neighbor is already in a peer-group and will
+         # now move on to _another_ peer-group
          #
          if grep -qsE "^(\s*)neighbor\s${NEIGHBOR}\speer-group\s" ${PRESTAGE_CONFIG}; then
-            #echo "also in ${PRESTAGE_CONFIG} a peer-group is set!"
             if ! grep -qsE "^(\s*)neighbor\s${NEIGHBOR}\speer-group\s${PEER_GROUP}\$" ${PRESTAGE_CONFIG}; then
-               #echo "but it's another peergroup then ${PEER_GROUP}"
+               REMOVE_CMDS+=( "${ENTERING_GROUP}" )
                REMOVE_CMDS+=( "no neighbor ${NEIGHBOR}" )
+               REMOVE_CMDS+=( "!" )
             fi
          fi
       fi
