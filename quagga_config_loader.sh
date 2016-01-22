@@ -690,11 +690,11 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
 
       #
       # special case for BGP - if its a neighbor-command and the peer is getting
-      # removed (because it's current hold in BGP_PEER_REMOVAL variable) we issue
-      # are not going to issue another removal-command for that neighbor
+      # removed (because it's current hold in BGP_PEER_REMOVAL variable) we are
+      # not going to issue another removal-command for that neighbor
       #
       if [ ! -z "${BGP_PEER_REMOVAL}" ] &&
-         [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL} ]]; then
+         [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:print:]]+$ ]]; then
          break
       fi
 
