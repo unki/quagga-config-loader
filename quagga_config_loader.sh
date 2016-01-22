@@ -672,7 +672,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       done
 
       #
-      # special case for BGP - if a a neighbor gets removed by either
+      # special case for BGP - if a neighbor gets removed by either
       #    - no neighbor name peer-group bla
       #    or
       #    - no neighbor name remote-as XXX
@@ -695,6 +695,15 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       if [ ! -z "${BGP_PEER_REMOVAL}" ] &&
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:print:]]+$ ]]; then
+         break
+      fi
+
+      #
+      # special case for BGP - if the BGP_IGNORE_NEIGHBOR_SHUTDOWN option is set
+      # and a shutdown option for a neighbor would be removed, ignore that command.
+      #
+      if [ ! -z "${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" ] &&
+         [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:blank:]]shutdown$ ]]; then
          break
       fi
 
