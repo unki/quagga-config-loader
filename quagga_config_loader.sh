@@ -191,12 +191,13 @@ elif [ "x${DAEMON}" == "xbabeld" ]; then
    declare -A GROUPING_CMDS=( ['router babel']='^router[[:blank:]]babel$' )
 fi
 
-declare -a ALL_NO_COMMAND_LIST=()
-declare -a ALL_COMMAND_LIST=()
+declare -a NO_MATCH_ARY=()
+declare -a MATCH_ARY=()
 
 #
 # retrieve lists of all available commands
 #
+ID_COUNTER=0
 for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
 
    declare -a NO_COMMAND_LIST=()
@@ -244,23 +245,37 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
       # remove leading blanks from command
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]##*( )}
 
+      #
+      # ignore certain commands
+      #
       if [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*(no[[:blank:]])*(show|clear|debug|write|line|list|disable|enable|configure|copy|terminal|ping|traceroute|telnet|ssh|start-shell|undebug|dump|username|exit|end|table|password|mpls-te|quit|address-family|continue)[[:blank:]]* ]]; then
          unset -v 'COMMAND_LIST[COMMAND_IDX]'
          continue
       fi
 
-      if ! [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*no[[:blank:]] ]]; then
+      #
+      # other borked syntaxis we do not want to care about...
+      #
+      if [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*(no[[:blank:]])*access-list[[:print:]]+[[:blank:]]host[[:blank:]] ]] ||
+         [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*(no[[:blank:]])*access-list[[:print:]]+[[:blank:]]ip[[:blank:]] ]] ||
+         [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*(no[[:blank:]])*access-list[[:print:]]+[[:blank:]]exact-match$ ]]; then
+         unset -v 'COMMAND_LIST[COMMAND_IDX]'
+         continue
+      fi
 
+      if ! [[ "${COMMAND_LIST[COMMAND_IDX]}" =~ ^[[:blank:]]*no[[:blank:]] ]]; then
          # adapt the command to be used later as a pattern match
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\(+([[:graph:]])\)/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\{+([[:graph:]])\}/\([[:graph:]]+\)}
-         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//<+([[:graph:]])>/\([[:graph:]]+\)}
+         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//*(.)<+([[:graph:]])>/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//A.B.C.D\/M/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//A.B.C.D/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//X:X::X:X\/M/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//X:X::X:X/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//IFNAME/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//WORD/\([[:graph:]]+\)}
+         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\.LINE/\([[:graph:]]+\)}
+         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//sequence-number/PARAM}
          continue
       fi
 
@@ -271,13 +286,14 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
       # adapt the no-command and replace all possible parameters by word 'PARAM'
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\(+([[:graph:]])\)/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\{+([[:graph:]])\}/PARAM}
-      COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//<+([[:graph:]])>/PARAM}
+      COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//*(.)<+([[:graph:]])>/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//A.B.C.D\/M/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//A.B.C.D/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//X:X::X:X\/M/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//X:X::X:X/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//IFNAME/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//WORD/PARAM}
+      COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\.LINE/PARAM}
       COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//sequence-number/PARAM}
       NO_COMMAND_LIST[COMMAND_IDX]="${COMMAND_LIST[COMMAND_IDX]}"
       unset -v 'COMMAND_LIST[COMMAND_IDX]'
@@ -287,8 +303,6 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
    log_end_msg "${#COMMAND_LIST[@]} commands found."
 
    # for each configuring command locate the matching unconfigure (no xxxx) command
-   declare -a NO_MATCH_ARY=()
-   declare -a MATCH_ARY=()
    log_begin_msg "Retrieving matching 'no' commands:"
 
    for COMMAND_IDX in ${!COMMAND_LIST[@]}; do
@@ -324,20 +338,34 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
                #
                # found a matching 'no' command?
                #
-               if [ "${NO_COMMAND//PARAM/([[:graph:]]+)}" == "no ${COMMAND}" ]; then
+               #if [[ "${NO_COMMAND//PARAM/([[:graph:]]+)}" =~ ^no[[:blank:]]*${COMMAND// /[[:blank:]]}$ ]]; then
+               if [[ "no ${COMMAND}" =~ ^${NO_COMMAND//PARAM/([[:graph:]]+)}$ ]]; then
                   # record the 'matching' command into the MATCH_ARY
-                  MATCH_ARY+=( [${COMMAND_IDX}]="${COMMAND// /[[:blank:]]}" )
+                  #MATCH_ARY+=( [${COMMAND_IDX}]="${COMMAND// /[[:blank:]]}" )
+                  #echo "${MATCH_ARY[@]}"
+                  MATCH_ARY+=( [${ID_COUNTER}]="${COMMAND// /[[:blank:]]}" )
                   # record the 'no' matching command into the NO_MATCH_ARY
-                  NO_MATCH_ARY+=( [${COMMAND_IDX}]="${NO_COMMAND}" )
+                  #NO_MATCH_ARY+=( [${COMMAND_IDX}]="${NO_COMMAND}" )
+                  NO_MATCH_ARY+=( [${ID_COUNTER}]="${NO_COMMAND}" )
                   #if [[ ${ORIG_COMMAND} =~ ip[[:blank:]]prefix ]]; then
                   #   #log_success_msg "For ${ORIG_COMMAND} i will use:"
                   #   #log_msg "${NO_COMMAND}"
+                  #fi
+                  #if [[ ${ORIG_COMMAND} =~ access-list ]]; then
+                  #   log_success_msg "For ${ORIG_COMMAND} i will use:"
+                  #   log_msg "no command::: ${NO_COMMAND}"
+                  #   echo "COMMAND: ${COMMAND}"
+                  #fi
+                  #if [[ "${COMMAND}" =~ ^[[:blank:]]*ip[[:blank:]]prefix ]]; then
+                  #   echo ${COMMAND}
+                  #   echo ${NO_COMMAND}
                   #fi
                   #if [[ "${COMMAND}" =~ ^[[:blank:]]*ip[[:blank:]]prefix ]]; then
                   #   echo ${COMMAND}
                   #   echo ${NO_COMMAND}
                   #fi
                   # exit those loops and continue with the next command
+                  ((ID_COUNTER++))
                   continue 4
                fi
 
@@ -379,12 +407,7 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
       exit 1
    fi
 
-   ALL_COMMAND_LIST+=$COMMAND_LIST
-   ALL_NO_COMMAND_LIST=$NO_COMMAND_LIST
 done
-
-COMMAND_LIST=$ALL_COMMAND_LIST
-NO_COMMAND_LIST=$ALL_NO_COMMAND_LIST
 
 #
 # walk through all grouping commands in ${RUNNING_CONFIG} and check if
@@ -447,6 +470,13 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #
    ENTRY=${ENTRIES[ENTRY_ID]##*( )}
 
+   # we currently can not revert existing "no"-commands like
+   #     no neighbor dmz-routers send-community both
+   # that are present int running configuration
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*no[[:blank:]] ]]; then
+      continue
+   fi
+
    #
    # is a group-end indicate by a '!'-only-line?
    #
@@ -460,7 +490,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       ((NEXT_ENTRY=ENTRY_ID+1))
       if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
          ENTERING_GROUP=
-         unset -v "GROUP_SECTION_RUNNING_CONFIG"
+         unset -v "GROUP_SECTION_PRESTAGE_CONFIG"
          unset -v "GROUP_ARY"
          #
          # if the last command that has been pushed to NEW_CMDS is exactly
@@ -480,16 +510,17 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    for GROUP_CMD in "${!GROUPING_CMDS[@]}"; do
 
       #
-      # if entry is a group command (which has been handled already a few lines
-      # up) we can skip to the next command.
+      # if entry is a group command we can continue here.
+      # would that group be removed, it will be already done in PRE_CMDS
       #
       if ! [[ "${ENTRY}" =~ ^${GROUP_CMD} ]]; then
          continue;
       fi
 
       #
-      # if we are still in a group that gets removed and it has not been cleanly
-      # closed by a '!' line, add a '!' as separator to the REMOVE_CMD list.
+      # if we have just handled a group before and that group has not been
+      # cleanly closed by a '!' line, add a '!' as separator to the REMOVE_CMDS
+      # list.
       #
       if [ ! -z "${ENTERING_GROUP}" ]; then
          REMOVE_CMDS+=( '!' )
@@ -499,24 +530,27 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       ENTERING_GROUP=${ENTRY}
       ENTERED_GROUP=
 
-      #
-      # retrieve the group stance via awk
-      #
-      GROUP_SECTION_RUNNING_CONFIG=$(awk "/^${ENTERING_GROUP}/,/\!/" ${RUNNING_CONFIG})
-      if [ -z "${GROUP_SECTION_RUNNING_CONFIG}" ]; then
-         log_failure_msg "awk returned no group section for group ${ENTERING_GROUP}!"
-         exit 1
+      if grep -qsF "${ENTERING_GROUP}" ${PRESTAGE_CONFIG}; then
+         #
+         # retrieve the prestage group stance via awk
+         #
+         GROUP_SECTION_PRESTAGE_CONFIG=$(awk "/^${ENTERING_GROUP}/,/\!/" ${PRESTAGE_CONFIG})
+         if [ -z "${GROUP_SECTION_PRESTAGE_CONFIG}" ]; then
+            log_failure_msg "awk returned no group-section for group ${ENTERING_GROUP} (${PRESTAGE_CONFIG})!"
+            exit 1
+         fi
+         unset -v 'GROUP_ARY'
+         mapfile -t GROUP_ARY <<<"${GROUP_SECTION_PRESTAGE_CONFIG}"
       fi
-
-      mapfile -t GROUP_ARY <<<"${GROUP_SECTION_RUNNING_CONFIG}"
       break
    done
 
    #
    # if command is a group command that is already scheduled for being removed,
-   # we can skip it and all further entries of the group.
+   # we can move on and skip all further commands from that group.
    #
    if [ ! -z "${ENTERING_GROUP}" ] && in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}$; then
+      unset -v 'ENTRIES[ENTRY_ID]'
       continue;
    fi
 
@@ -529,21 +563,25 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    fi
 
    #
-   # if the same command is still available in the ${PRESTAGE_CONFIG},
-   # we can skip it - it doesn't get removed.
+   # if the exactly same command (-F option for grep is important!)
+   # is still present in ${PRESTAGE_CONFIG}, we can skip it. line
+   # will not get removed.
    #
-   if grep -qsE "^(\s*)${ENTRY}$" ${PRESTAGE_CONFIG}; then
-      unset -v 'ENTRIES[ENTRY_ID]'
-      continue;
+   if [ ! -z "${ENTERING_GROUP}" ] && in_array GROUP_ARY ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
+      continue
+   elif [ -z "${ENTERING_GROUP}" ] && grep -qsF "${ENTRY}" ${PRESTAGE_CONFIG}; then
+      continue
    fi
 
    #
-   # special case for access-lists and prefix-lists. if the list get's removed
-   # we need to issue only a 'no' command with the lists name as parameter.
+   # special case for access-, prefix-and as-path-lists.
+   #
+   # if the list gets completely removed, we need to issue only
+   # a 'no' command with the lists name as parameter.
    #
    if [[ "${ENTRY}" =~ ^[[:blank:]]*access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
-      if ! grep -qs "access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
+      if ! grep -qsE "^[[:blank:]]*access-list[[:blank:]]${LIST_NAME}" ${PRESTAGE_CONFIG}; then
          if ! in_array REMOVE_CMDS ^no[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
             REMOVE_CMDS+=( "no access-list ${LIST_NAME}" )
          fi
@@ -551,7 +589,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
    elif [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
-      if ! grep -qs "ip prefix-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
+      if ! grep -qsE "^[[:blank:]]*ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}" ${PRESTAGE_CONFIG}; then
          if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}$; then
             REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME}" )
          fi
@@ -559,7 +597,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
    elif [[ "${ENTRY}" =~ ^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]([[:graph:]]+)[[:blank:]] ]]; then
       LIST_NAME=${BASH_REMATCH[1]}
-      if ! grep -qs "ip as-path access-list ${LIST_NAME}" ${PRESTAGE_CONFIG}; then
+      if ! grep -qsE "^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}" ${PRESTAGE_CONFIG}; then
          if ! in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
             REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME}" )
          fi
@@ -609,23 +647,25 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
 
    #
    # if we are in a grouping-command (interface, router bgp, etc.) and the group
-   # does _not_ get removed, we need to enter that group first before we can
-   # modify one of its sub commands.
+   # does _not_ get removed, we need to enter that group first before we can add
+   # or modify one of its sub commands.
    #
-   if [ ! -z "${ENTERING_GROUP}" ] && ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}$ && [ -z "${ENTERED_GROUP}" ]; then
+   if [ ! -z "${ENTERING_GROUP}" ] &&
+      [ -z "${ENTERED_GROUP}" ] &&
+      ! in_array PRE_CMDS ^no[[:blank:]]${ENTERING_GROUP// /[[:blank:]]}$; then
       REMOVE_CMDS+=( "${ENTERING_GROUP}" )
       ENTERED_GROUP=${ENTERING_GROUP}
+   fi
    #
    # special case for route-map - instead of trying to unset something within
    # a route-map, unset the complete route-map instead.
    # it is far easier to handle that way.
    #
-   elif [ -z "${ENTERING_GROUP}" ] && [ ! -z "${ENTERED_GROUP}" ] &&
-        [[ "${ENTERED_GROUP}" =~ ^[[:blank:]]*route-map[[:blank:]] ]]; then
-      if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}$; then
-         PRE_CMDS+=( "no ${ENTERED_GROUP}" )
-      fi
-   fi
+   #elif [ -z "${ENTERING_GROUP}" ] && [ ! -z "${ENTERED_GROUP}" ] &&
+   #     [[ "${ENTERED_GROUP}" =~ ^[[:blank:]]*route-map[[:blank:]] ]]; then
+   #   if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}$; then
+   #      PRE_CMDS+=( "no ${ENTERED_GROUP}" )
+   #   fi
 
    #
    # find the matching command
@@ -668,12 +708,14 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       if ! [[ "${MATCH_NO_COMMAND}" =~ (PARAM)+ ]]; then
          REMOVE_CMDS+=( "${MATCH_NO_COMMAND}" )
+         NO_COMMAND=true
          break
       fi
 
       # just to be sure...
       if [ ${#BASH_REMATCH[@]} -le 1 ]; then
          REMOVE_CMDS+=( "${MATCH_NO_COMMAND}" )
+         NO_COMMAND=true
          break
       fi
 
@@ -711,6 +753,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          if ! in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}$; then
             REMOVE_CMDS+=( "no neighbor ${BGP_PEER_REMOVAL}" )
          fi
+         NO_COMMAND=true
          break
       fi
 
@@ -721,6 +764,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       if [ ! -z "${BGP_PEER_REMOVAL}" ] &&
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:print:]]+$ ]]; then
+         NO_COMMAND=true
          break
       fi
 
@@ -730,12 +774,14 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       if [ ! -z "${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" ] &&
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:blank:]]shutdown$ ]]; then
+         NO_COMMAND=true
          break
       fi
 
       # distance bgp ([0-9]*) ([0-9]*) ([0-9]*) - a special case within a router-bgp.
       # best removed by issuing "no distance bgp" ignoring all suffix-parameters
       if [[ "${ENTRY}" =~ ^[[:blank:]]*distance[[:blank:]]bgp ]]; then
+         NO_COMMAND=true
          REMOVE_CMDS+=( "no distance bgp" )
          break;
       fi
@@ -747,10 +793,19 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #exit 5
 
       REMOVE_CMDS+=( "${NO_COMMAND}" )
+      NO_COMMAND=true
       break
    done
 
-   #if [[ "${ENTRY}" =~ shutdown ]]; then
+   #
+   # we come here only if no matching 'no' command has been found
+   #
+   if [ -z ${NO_COMMAND} ]; then
+      log_failure_msg "Found no 'no' command for '${ENTRY}'."
+      log_failure_msg "I will better exit now for not doing something wrong!"
+      exit 1
+   fi
+   #if [[ "${ENTRY}" =~ prepend ]]; then
    #   echo $ENTRY
    #   echo $NO_COMMAND
    #fi
@@ -821,7 +876,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
    fi
 
-   # funilly the 'banner' command is not available with vtysh. skip it. a quagga bug
+   # funilly the 'banner' command is not available by vtysh. skip it. a Quagga bug
    [[ "${ENTRY}" =~ ^banner ]] && continue
 
    # if an 'interface', rember the interface we are currently working on for later entries
@@ -856,16 +911,18 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          ENTERED_GROUP=${ENTRY}
          NEW_CMDS+=( "${ENTRY}" )
 
-         #
-         # retrieve the group stance via awk
-         #
-         GROUP_SECTION_RUNNING_CONFIG=$(awk "/^${ENTERED_GROUP}/,/\!/" ${RUNNING_CONFIG})
-         if [ -z "${GROUP_SECTION_RUNNING_CONFIG}" ]; then
-            log_failure_msg "awk returned no group section for group ${ENTERING_GROUP}!"
-            exit 1
+         if grep -qsF "${ENTERED_GROUP}" ${RUNNING_CONFIG}; then
+            #
+            # retrieve the group stance via awk
+            #
+            GROUP_SECTION_RUNNING_CONFIG=$(awk "/^${ENTERED_GROUP}/,/\!/" ${RUNNING_CONFIG})
+            if [ -z "${GROUP_SECTION_RUNNING_CONFIG}" ]; then
+               log_failure_msg "awk returned no group section for group ${ENTERED_GROUP} (${RUNNING_CONFIG})!"
+               exit 1
+            fi
+            unset -v 'GROUP_ARY'
+            mapfile -t GROUP_ARY <<<"${GROUP_SECTION_RUNNING_CONFIG}"
          fi
-
-         mapfile -t GROUP_ARY <<<"${GROUP_SECTION_RUNNING_CONFIG}"
          continue 2;
       fi
    done
@@ -923,30 +980,35 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       LIST_TARGET=${BASH_REMATCH[3]}
       # as as-path can contain regular expression characters, we need to escape them
       ENTRY_ESCAPED=${ENTRY}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\|/\\\|}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\*/\\\*}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\./\\\.}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\+/\\\+}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\?/\\\?}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\^/\\\^}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\$/\\\$}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\[/\\\[}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\]/\\\]}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\(/\\\(}
-      ENTRY_ESCAPED=${ENTRY_ESCAPED//\)/\\\)}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\|/\\|}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\*/\\*}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\./\\.}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\+/\\+}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\?/\\?}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\[/\\[}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\]/\\]}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\(/\\(}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\)/\\)}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\^/\\^}
+      ENTRY_ESCAPED=${ENTRY_ESCAPED//\$/\\$}
+      echo
+      echo ${ENTRY}
       # if as-path access-list is schedulded for removal, we can skip this line.
       if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
          continue;
       fi
-      # if the exactly same command is present in running-configuration, do not touch it.
+      # if the exactly same command is present in running-configuration, we can move on to the next entry.
       if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY_ESCAPED// /[[:blank:]]}$; then
+         echo "Existing entry: ${ENTRY_ESCAPED}"
          continue;
       fi
       for MODE in permit deny; do
          if in_array RUNNING_ENTRIES ^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
+            echo "Removing entry: ${ENTRY_ESCAPED}"
             REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
+      echo "New entry: ${ENTRY_ESCAPED}"
       NEW_CMDS+=( "${ENTRY}" )
       continue
    fi
@@ -1202,7 +1264,7 @@ if [ ${#NEW_CMDS[@]} -gt 0 ]; then
 fi
 
 if [ "x${CHANGES_MADE}" != "xtrue" ]; then
-   log_msg "No changes have been schedulded."
+   log_msg "No changes to be made."
    exit 0
 fi
 
