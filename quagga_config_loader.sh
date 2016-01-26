@@ -460,8 +460,21 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       ((NEXT_ENTRY=ENTRY_ID+1))
       if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
          ENTERING_GROUP=
+         unset -v "GROUP_SECTION_RUNNING_CONFIG"
+         unset -v "GROUP_ARY"
+         #
+         # if the last command that has been pushed to NEW_CMDS is exactly
+         # our ENTERED_GROUP, we can remove it from the NEW_CMDS array
+         #
+         if [ ${#REMOVE_CMDS[@]} -gt 0 ] &&
+            [ ! -z "${REMOVE_CMDS[-1]}" ] &&
+            [[ ${REMOVE_CMDS[-1]} =~ ^${ENTERED_GROUP// /[[:blank:]]}$ ]]; then
+            # unset of array elements by using an negative array index seems not to be supported right now.
+            #unset -v 'REMOVE_CMDS[-1]'
+            LAST_ELEMENT="$(( ${#REMOVE_CMDS[@]} - 1 ))"
+            unset -v "REMOVE_CMDS[${LAST_ELEMENT}]"
+         fi
       fi
-
    fi
 
    for GROUP_CMD in "${!GROUPING_CMDS[@]}"; do
@@ -482,8 +495,20 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          REMOVE_CMDS+=( '!' )
       fi
 
+      # helper-variable to remember that we have found a grouping-cmd
       ENTERING_GROUP=${ENTRY}
       ENTERED_GROUP=
+
+      #
+      # retrieve the group stance via awk
+      #
+      GROUP_SECTION_RUNNING_CONFIG=$(awk "/^${ENTERING_GROUP}/,/\!/" ${RUNNING_CONFIG})
+      if [ -z "${GROUP_SECTION_RUNNING_CONFIG}" ]; then
+         log_failure_msg "awk returned no group section for group ${ENTERING_GROUP}!"
+         exit 1
+      fi
+
+      mapfile -t GROUP_ARY <<<"${GROUP_SECTION_RUNNING_CONFIG}"
       break
    done
 
@@ -591,9 +616,10 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       REMOVE_CMDS+=( "${ENTERING_GROUP}" )
       ENTERED_GROUP=${ENTERING_GROUP}
    #
-   # special case for route-map - instead of trying to unset something wihtin
-   # a route-map, unset the complete route-map instead. it's far easier to
-   # handle.
+   # special case for route-map - instead of trying to unset something within
+   # a route-map, unset the complete route-map instead.
+   # it is far easier to handle that way.
+   #
    elif [ -z "${ENTERING_GROUP}" ] && [ ! -z "${ENTERED_GROUP}" ] &&
         [[ "${ENTERED_GROUP}" =~ ^[[:blank:]]*route-map[[:blank:]] ]]; then
       if ! in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}$; then
@@ -777,6 +803,20 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       if ! [[ "${ENTRIES[NEXT_ENTRY]}" =~ ^[[:blank:]]*address-family[[:blank:]]ipv6$ ]]; then
          NEW_CMDS+=( "exit" )
          ENTERED_GROUP=
+         unset -v "GROUP_SECTION_RUNNING_CONFIG"
+         unset -v "GROUP_ARY"
+         #
+         # if the last command that has been pushed to NEW_CMDS is exactly
+         # our ENTERED_GROUP, we can remove it from the NEW_CMDS array
+         #
+         if [ ${#NEW_CMDS[@]} -gt 0 ] &&
+            [ ! -z "${NEW_CMDS[-1]}" ] &&
+            [[ ${NEW_CMDS[-1]} =~ ^${ENTERED_GROUP// /[[:blank:]]}$ ]]; then
+            # unset of array elements by using an negative array index seems not to be supported right now.
+            #unset -v 'NEW_CMDS[-1]'
+            LAST_ELEMENT="$(( ${#NEW_CMDS[@]} - 1 ))"
+            unset -v "NEW_CMDS[${LAST_ELEMENT}]"
+         fi
          continue
       fi
    fi
@@ -790,10 +830,12 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    fi
 
    #
-   # now we try to figure out, if the same entry is still present in
-   # the running configuration and we do not need to reissue it on ${DAEMON}.
-   # What should be avoided in case of bgpd to not reestablish BGP session to
-   # its peers. But there are some special chases to handle.
+   # now we try to figure out, if the same entry is still present in the
+   # running configuration.
+   # If so, we do not need to reissue the same command on ${DAEMON}.
+   #
+   # What should be avoided in case of bgpd is to not reestablish BGP
+   # session to peers. But there are some special chases to handle.
    #
 
    #
@@ -813,9 +855,21 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
 
          ENTERED_GROUP=${ENTRY}
          NEW_CMDS+=( "${ENTRY}" )
+
+         #
+         # retrieve the group stance via awk
+         #
+         GROUP_SECTION_RUNNING_CONFIG=$(awk "/^${ENTERED_GROUP}/,/\!/" ${RUNNING_CONFIG})
+         if [ -z "${GROUP_SECTION_RUNNING_CONFIG}" ]; then
+            log_failure_msg "awk returned no group section for group ${ENTERING_GROUP}!"
+            exit 1
+         fi
+
+         mapfile -t GROUP_ARY <<<"${GROUP_SECTION_RUNNING_CONFIG}"
          continue 2;
       fi
    done
+
    #
    # if new items get added to prefix- or access-list.
    # - check if there is already a list-entry with the same sequence-number
@@ -930,6 +984,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       NEW_CMDS+=( "${ENTRY}" )
       continue
    fi
+
    #
    # if we are in a group, we need to find out if running config
    # contains the exactly same entry in the exactly same group.
@@ -938,29 +993,29 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       # if group hasn't exist before, we can continue
       #
-      if ! in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTERED_GROUP// /[[:blank:]]}; then
+      if ! in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTERED_GROUP// /[[:blank:]]}$; then
       #if ! grep -qsE "^(\s*)${ENTERED_GROUP}" ${RUNNING_CONFIG}; then
          NEW_CMDS+=( "${ENTRY}" )
          continue;
       fi
+
       #
-      # retrieve the group stance via awk
+      # if group has existed before, but has now been scheduled for
+      # removal in the PRE_CMDs array (because one or more lines may
+      # have vanished from that group), we have to reload that group anyway.
       #
-      RUNNING_CONFIG_GROUP_SECTION=$(awk "/^${ENTERED_GROUP}/,/\!/" ${RUNNING_CONFIG})
-      if [ -z "${RUNNING_CONFIG_GROUP_SECTION}" ]; then
-         log_failure_msg "awk returned no group section for group ${ENTERED_GROUP}!"
-         exit 1
+      if in_array PRE_CMDS ^no[[:blank:]]${ENTERED_GROUP// /[[:blank:]]}$; then
+         NEW_CMDS+=( "${ENTRY}" )
+         continue;
       fi
+
       #
       # does the group section contain our $ENTRY
       #
-      mapfile -t GROUP_ARY <<<"${RUNNING_CONFIG_GROUP_SECTION}"
       if ! in_array GROUP_ARY ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
          NEW_CMDS+=( "${ENTRY}" )
          continue;
       fi
-      unset -v "RUNNING_CONFIG_GROUP_SECTION"
-      unset -v "GROUP_ARY"
    fi
    # now finally.
    if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
@@ -1146,15 +1201,16 @@ if [ ${#NEW_CMDS[@]} -gt 0 ]; then
    fi
 fi
 
-if [ "x${DRY_RUN}" != "xtrue" ] && [ "x${CHANGES_MADE}" != "xtrue" ]; then
-   log_msg "No changes were made."
+if [ "x${CHANGES_MADE}" != "xtrue" ]; then
+   log_msg "No changes have been schedulded."
+   exit 0
 fi
 
 #
 # BGP, clear session (soft)
 #
 if [ "x${DAEMON}" == "xbgpd" ]; then
-   if [ "x${DRY_RUN}" == "xtrue" ]; then
+   if [ "x${DRY_RUN}" == "xtrue" ] && ; then
       log_msg "DRY-RUN: clear ip bgp * soft"
    else
       ${VTYSH} -d ${DAEMON} -c 'clear ip bgp * soft' 2>&1 >/dev/null
