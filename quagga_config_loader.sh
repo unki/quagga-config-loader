@@ -176,7 +176,9 @@ elif [ "x${DAEMON}" == "xospfd" ]; then
 elif [ "x${DAEMON}" == "xospf6d" ]; then
    declare -A GROUPING_CMDS=( ['interface']='^interface' ['router ospf6']='^router[[:blank:]]ospf6$' )
 elif [ "x${DAEMON}" == "xbgpd" ]; then
-   # special case, we need to grep out the AS number from that command
+   #
+   # special case for bgpd, we need to grep out the AS number from that command
+   #
    ASN=$(grep "^router bgp" ${RUNNING_CONFIG} | awk '{ print $3 }')
    if [ -z "${ASN}" ]; then
       log_failure_msg "Failed to locate ASN of ${DAEMON}."
@@ -348,17 +350,13 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
                   #NO_MATCH_ARY+=( [${COMMAND_IDX}]="${NO_COMMAND}" )
                   NO_MATCH_ARY+=( [${ID_COUNTER}]="${NO_COMMAND}" )
                   #if [[ ${ORIG_COMMAND} =~ ip[[:blank:]]prefix ]]; then
-                  #   #log_success_msg "For ${ORIG_COMMAND} i will use:"
-                  #   #log_msg "${NO_COMMAND}"
+                  #   log_success_msg "For ${ORIG_COMMAND} i will use:"
+                  #   log_msg "${NO_COMMAND}"
                   #fi
                   #if [[ ${ORIG_COMMAND} =~ access-list ]]; then
                   #   log_success_msg "For ${ORIG_COMMAND} i will use:"
                   #   log_msg "no command::: ${NO_COMMAND}"
                   #   echo "COMMAND: ${COMMAND}"
-                  #fi
-                  #if [[ "${COMMAND}" =~ ^[[:blank:]]*ip[[:blank:]]prefix ]]; then
-                  #   echo ${COMMAND}
-                  #   echo ${NO_COMMAND}
                   #fi
                   #if [[ "${COMMAND}" =~ ^[[:blank:]]*ip[[:blank:]]prefix ]]; then
                   #   echo ${COMMAND}
@@ -408,6 +406,32 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
    fi
 
 done
+
+#
+# sort match-array from the longest matches to the shortest.
+#
+mapfile -t SORTED_MATCH_KEYS < <(for MATCH_ID in ${!MATCH_ARY[@]}; do
+   echo "${#MATCH_ARY[MATCH_ID]}#${MATCH_ID}"
+done | sort -rn -t'#' -k1 | cut -d'#' -f2- --output-delimiter='=')
+
+if [ -z "${SORTED_MATCH_KEYS}" ]; then
+   log_failure_msg "Something must have gone wrong during sorting match-array!"
+   exit 1
+fi
+
+declare -a MATCH_KEYS=()
+for MATCH in "${SORTED_MATCH_KEYS[@]}"; do
+   KEY=${MATCH%=*}
+   VALUE=${MATCH##*=}
+   if [ -z "${KEY}" ] || [ -z "${VALUE}" ]; then
+      continue
+   fi
+   MATCH_KEYS+=( "${KEY}" )
+done
+
+#for MATCH in "${MATCH_KEYS[@]}"; do
+#   echo "${MATCH}"
+#done
 
 #
 # walk through all grouping commands in ${RUNNING_CONFIG} and check if
@@ -483,7 +507,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    if [ ! -z "${ENTERING_GROUP}" ] && [[ "${ENTRY}" =~ ^!$ ]]; then
 
       #
-      # a special case for bgp - if a '!'-only-line is followed by a
+      # a special case for bgpd - if a '!'-only-line is followed by a
       # 'address-family ipv6' line - we have to remain in that group
       # (router bgp XXXX) as now the IPv6 configuration will follow.
       #
@@ -574,7 +598,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    fi
 
    #
-   # special case for access-, prefix-and as-path-lists.
+   # special cases for access-, prefix-and as-path-lists.
    #
    # if the list gets completely removed, we need to issue only
    # a 'no' command with the lists name as parameter.
@@ -606,7 +630,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    fi
 
    #
-   # special case for BGP - if neighbor already exists and has a peer-group or a
+   # special case for bgpd - if neighbor already exists and has a peer-group or a
    # remote-as set, but now joins another peer-group - then that neighbor needs
    # to be deconfigured first.
    #
@@ -668,12 +692,14 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #   fi
 
    #
-   # find the matching command
+   # now let us find the matching command for the
+   # current processed entry.
    #
-   for MATCH_ID in ${!MATCH_ARY[@]}; do
+   #for MATCH_ID in ${!MATCH_ARY[@]}; do
+   for MATCH_ID in ${MATCH_KEYS[@]}; do
 
       NO_COMMAND=
-      MATCH_COMMAND="${MATCH_ARY[MATCH_ID]}"
+      MATCH_COMMAND="${MATCH_ARY[${MATCH_ID}]}"
 
       #
       # this usually should not happen...
@@ -687,11 +713,18 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       # skip to the next command if we have no match here.
       #
+      #echo ${MATCH_COMMAND}
       if ! [[ "${ENTRY}" =~ ^${MATCH_COMMAND} ]]; then
          continue
       fi
 
-      MATCH_NO_COMMAND="${NO_MATCH_ARY[MATCH_ID]}"
+      #if [[ "${ENTRY}" =~ prefix-list ]]; then
+      #   echo ${ENTRY}
+      #   echo ${MATCH_COMMAND}
+      #   exit 1
+      #fi
+
+      MATCH_NO_COMMAND="${NO_MATCH_ARY[${MATCH_ID}]}"
 
       #
       # this usually should not happen too...
@@ -740,7 +773,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       done
 
       #
-      # special case for BGP - if a neighbor gets removed by either
+      # special case for bgpd - if a neighbor gets removed by either
       #    - no neighbor name peer-group bla
       #    or
       #    - no neighbor name remote-as XXX
@@ -758,7 +791,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
 
       #
-      # special case for BGP - if its a neighbor-command and the peer is getting
+      # special case for bgpd - if its a neighbor-command and the peer is getting
       # removed (because it's current hold in BGP_PEER_REMOVAL variable) we are
       # not going to issue another removal-command for that neighbor
       #
@@ -769,7 +802,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
 
       #
-      # special case for BGP - if the BGP_IGNORE_NEIGHBOR_SHUTDOWN option is set
+      # special case for bgpd - if the BGP_IGNORE_NEIGHBOR_SHUTDOWN option is set
       # and a shutdown option for a neighbor would be removed, ignore that command.
       #
       if [ ! -z "${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" ] &&
@@ -778,8 +811,9 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          break
       fi
 
-      # distance bgp ([0-9]*) ([0-9]*) ([0-9]*) - a special case within a router-bgp.
-      # best removed by issuing "no distance bgp" ignoring all suffix-parameters
+      # distance bgp ([0-9]*) ([0-9]*) ([0-9]*) - a special case for bgpd within
+      # a router-bgp statement. best removed by issuing "no distance bgp"
+      # ignoring all suffix-parameters
       if [[ "${ENTRY}" =~ ^[[:blank:]]*distance[[:blank:]]bgp ]]; then
          NO_COMMAND=true
          REMOVE_CMDS+=( "no distance bgp" )
@@ -787,7 +821,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
 
       #echo "Entry: ${ENTRY}"
-      #echo "Best match: ${MATCH_COMMAND}"
+      ##echo "Best match: ${MATCH_COMMAND}"
       #echo "No command: ${MATCH_NO_COMMAND}"
       #echo "Will use: ${NO_COMMAND}"
       #exit 5
@@ -850,7 +884,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    if [ ! -z "${ENTERED_GROUP}" ] && [[ "${ENTRY}" =~ ^!$ ]]; then
 
       #
-      # a special case for bgp - if a '!'-only-line is followed by a
+      # a special case for bgpd - if a '!'-only-line is followed by a
       # 'address-family ipv6' line - we have to remain in that group
       # (router bgp XXXX) as now the IPv6 configuration will follow.
       #
@@ -991,24 +1025,23 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\)/\\)}
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\^/\\^}
       ENTRY_ESCAPED=${ENTRY_ESCAPED//\$/\\$}
-      echo
-      echo ${ENTRY}
+      #echo; echo ${ENTRY}
       # if as-path access-list is schedulded for removal, we can skip this line.
       if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}$; then
          continue;
       fi
       # if the exactly same command is present in running-configuration, we can move on to the next entry.
       if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY_ESCAPED// /[[:blank:]]}$; then
-         echo "Existing entry: ${ENTRY_ESCAPED}"
+         #echo "Existing entry: ${ENTRY_ESCAPED}"
          continue;
       fi
       for MODE in permit deny; do
          if in_array RUNNING_ENTRIES ^[[:blank:]]*ip[[:blank:]]as-path[[:blank:]]access-list[[:blank:]]${LIST_NAME}[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
-            echo "Removing entry: ${ENTRY_ESCAPED}"
+            #echo "Removing entry: ${ENTRY_ESCAPED}"
             REMOVE_CMDS+=( "no ip as-path access-list ${LIST_NAME} ${MODE} ${LIST_TARGET}" )
          fi
       done
-      echo "New entry: ${ENTRY_ESCAPED}"
+      #echo "New entry: ${ENTRY_ESCAPED}"
       NEW_CMDS+=( "${ENTRY}" )
       continue
    fi
@@ -1021,12 +1054,17 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       LIST_SEQ=${BASH_REMATCH[2]}
       LIST_MODE=${BASH_REMATCH[3]}
       LIST_TARGET=${BASH_REMATCH[4]}
+      #
       # if prefix-list is schedulded for removal, we can skip this line.
-      if in_array REMOVE_CMDS ^no[[:blank:]]ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}$; then
+      #
+      if in_array REMOVE_CMDS ^no[[:blank:]]*ip[[:blank:]]*prefix-list[[:blank:]]*${LIST_NAME}$; then
          #log_msg "already scheduled for removal"
          continue;
       fi
-      # if the exactly same command is present in running-configuration, do not touch it.
+      #
+      # if the exactly same command is present in running-configuration,
+      # do not touch it.
+      #
       if in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTRY// /[[:blank:]]}$; then
          #log_msg "still exists in running: ${ENTRY}"
          continue;
@@ -1036,7 +1074,10 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #   #log_msg "will remove existing ${LIST_NAME} ${LIST_SEQ}"
       #   REMOVE_CMDS+=( "no ip prefix-list ${LIST_NAME} seq ${LIST_SEQ}" )
       #fi
-      # if there is already the same target in our prefix-list, but possible at another position as the new one, unload it.
+      #
+      # if there is already the same target in our prefix-list, but
+      # possible at another position as the new one, unload it.
+      #
       for MODE in permit deny; do
          if in_array RUNNING_ENTRIES ^ip[[:blank:]]prefix-list[[:blank:]]${LIST_NAME}[[:blank:]]seq[[:blank:]][[:digit:]]+[[:blank:]]${MODE}[[:blank:]]${LIST_TARGET}$; then
             #log_msg "will remove existing ${LIST_NAME} ${MODE} ${LIST_TARGET}"
@@ -1048,7 +1089,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    fi
 
    #
-   # if we are in a group, we need to find out if running config
+   # if we are in a group, we need to figure out if running-config
    # contains the exactly same entry in the exactly same group.
    #
    if [ ! -z "${ENTERED_GROUP}" ]; then
@@ -1089,9 +1130,9 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #
 
    #
-   # ip ospf message-digest-key - a special case, command can not be
-   # overwriten in the running configuration (already-exists-error).
-   # it needs to be 'no'ed first.
+   # ip ospf message-digest-key - a special case ospfd, command can
+   # not be overwriten in the running configuration (already-exists-
+   # error). it needs to be 'no'ed first.
    #
    if [[ "${ENTRY}" =~ ^ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
       OSPF_MSG_KEY=${BASH_REMATCH[1]}
@@ -1272,7 +1313,7 @@ fi
 # BGP, clear session (soft)
 #
 if [ "x${DAEMON}" == "xbgpd" ]; then
-   if [ "x${DRY_RUN}" == "xtrue" ] && ; then
+   if [ "x${DRY_RUN}" == "xtrue" ]; then
       log_msg "DRY-RUN: clear ip bgp * soft"
    else
       ${VTYSH} -d ${DAEMON} -c 'clear ip bgp * soft' 2>&1 >/dev/null
