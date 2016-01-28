@@ -277,7 +277,8 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//IFNAME/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//WORD/\([[:graph:]]+\)}
          COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//\.LINE/\([[:graph:]]+\)}
-         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//sequence-number/PARAM}
+         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//sequence-number/\([[:graph:]]+\)}
+         COMMAND_LIST[COMMAND_IDX]=${COMMAND_LIST[COMMAND_IDX]//PROTO/\([[:graph:]]+\)}
          continue
       fi
 
@@ -354,7 +355,7 @@ for LIST in ROOT "${!GROUPING_CMDS[@]}"; do
                   #   log_success_msg "For ${ORIG_COMMAND} i will use:"
                   #   log_msg "${NO_COMMAND}"
                   #fi
-                  #if [[ ${ORIG_COMMAND} =~ access-list ]]; then
+                  #if [[ ${ORIG_COMMAND} =~ protocol ]]; then
                   #   log_success_msg "For ${ORIG_COMMAND} i will use:"
                   #   log_msg "no command::: ${NO_COMMAND}"
                   #   echo "COMMAND: ${COMMAND}"
@@ -714,16 +715,14 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       #
       # skip to the next command if we have no match here.
       #
-      #echo ${MATCH_COMMAND}
+      # enable for debugging
+      #if [[ "${ENTRY}" =~ protocol ]]; then
+      #   echo ${ENTRY}
+      #   echo ${MATCH_COMMAND}
+      #fi
       if ! [[ "${ENTRY}" =~ ^${MATCH_COMMAND} ]]; then
          continue
       fi
-
-      #if [[ "${ENTRY}" =~ prefix-list ]]; then
-      #   echo ${ENTRY}
-      #   echo ${MATCH_COMMAND}
-      #   exit 1
-      #fi
 
       MATCH_NO_COMMAND="${NO_MATCH_ARY[${MATCH_ID}]}"
 
