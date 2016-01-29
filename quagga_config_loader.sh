@@ -716,6 +716,13 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          exit 1
       fi
 
+      # passwords - strangly there is no "no password" command in Quagga.
+      # so we are not trying to unset an existing password line.
+      if [[ "${ENTRY}" =~ ^[[:blank:]]*password[[:blank:]] ]]; then
+         NO_COMMAND=true
+         break;
+      fi
+
       #
       # skip to the next command if we have no match here.
       #
@@ -821,13 +828,6 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       if [[ "${ENTRY}" =~ ^[[:blank:]]*distance[[:blank:]]bgp ]]; then
          NO_COMMAND=true
          REMOVE_CMDS+=( "no distance bgp" )
-         break;
-      fi
-
-      # passwords - strangly there is no "no password" command in Quagga.
-      # so we are not trying to unset an existing password line.
-      if [[ "${ENTRY}" =~ ^[[:blank:]]*password[[:blank:]] ]]; then
-         NO_COMMAND=true
          break;
       fi
 
