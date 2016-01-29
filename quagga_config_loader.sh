@@ -824,6 +824,13 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          break;
       fi
 
+      # passwords - strangly there is no "no password" command in Quagga.
+      # so we are not trying to unset an existing password line.
+      if [[ "${ENTRY}" =~ ^[[:blank:]]*password[[:blank:]] ]]; then
+         NO_COMMAND=true
+         break;
+      fi
+
       #echo "Entry: ${ENTRY}"
       ##echo "Best match: ${MATCH_COMMAND}"
       #echo "No command: ${MATCH_NO_COMMAND}"
