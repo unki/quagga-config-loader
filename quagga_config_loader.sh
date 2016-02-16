@@ -592,6 +592,11 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       continue;
    fi
 
+   # if an 'interface', rember the interface we are currently working on for later entries
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*interface[[:blank:]]([[:graph:]]+)$ ]]; then
+      IF_NAME=${BASH_REMATCH[1]}
+   fi
+
    #
    # if the exactly same command (-F option for grep is important!)
    # is still present in ${PRESTAGE_CONFIG}, we can skip it. line
@@ -829,6 +834,20 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          NO_COMMAND=true
          REMOVE_CMDS+=( "no distance bgp" )
          break;
+      fi
+
+      #
+      # ip ospf message-digest-key - a special case ospfd, command can
+      # not be overwriten in the running configuration (already-exists-
+      # error). it needs to be 'no'ed first.
+      #
+      if [[ "${ENTRY}" =~ ^ip[[:blank:]]ospf[[:blank:]]message-digest-key[[:blank:]]([[:digit:]]{1,3})[[:blank:]] ]]; then
+         OSPF_MSG_KEY=${BASH_REMATCH[1]}
+         if grep -Pzoqs "interface ${IF_NAME}\n(\s*)ip ospf message-digest-key ${OSPF_MSG_KEY}\s" ${RUNNING_CONFIG}; then
+            NO_COMMAND=true
+            REMOVE_CMDS+=( "no ip ospf message-digest-key ${OSPF_MSG_KEY}" )
+            break
+         fi
       fi
 
       #echo "Entry: ${ENTRY}"
