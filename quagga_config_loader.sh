@@ -821,10 +821,11 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       # special case for bgpd - if the BGP_IGNORE_NEIGHBOR_SHUTDOWN option is set
       # and a shutdown option for a neighbor would be removed, ignore that command.
       #
-      if [ ! -z "${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" ] &&
-         [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:blank:]]shutdown$ ]]; then
-         NO_COMMAND=true
-         break
+      if [ ! -z "${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" ]; then
+         if [[ "${NO_COMMAND}" =~ ^[[:blank:]]*no[[:blank:]]+neighbor[[:blank:]][[:graph:]]+[[:blank:]]shutdown$ ]]; then
+            NO_COMMAND=true
+            break
+         fi
       fi
 
       # distance bgp ([0-9]*) ([0-9]*) ([0-9]*) - a special case for bgpd within
