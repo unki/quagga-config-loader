@@ -708,7 +708,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    # so we have to hardcode it here.
    #
    if [[ "${ENTRY}" =~ ^[[:blank:]]*set[[:blank:]]ip[[:blank:]]next-hop[[:blank:]]peer-address$ ]]; then
-      REMOVE_CMDS="no set ip next-hop"
+      REMOVE_CMDS+=( "no set ip next-hop" )
       continue
    fi
 
