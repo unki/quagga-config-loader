@@ -703,6 +703,16 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #   fi
 
    #
+   # special case for route-maps in bgpd for set-ip-next­hop-peer-address.
+   # how to remove that command is not stated in the command-'list'.
+   # so we have to hardcode it here.
+   #
+   if [[ "${ENTRY}" =~ ^[[:blank:]]*set[[:blank:]]ip[[:blank:]]next-hop[[:blank:]]peer-address$ ]]; then
+      REMOVE_CMDS="no set ip next-hop"
+      continue
+   fi
+
+   #
    # now let us find the matching command for the
    # current processed entry.
    #
