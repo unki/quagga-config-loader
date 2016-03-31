@@ -439,6 +439,10 @@ done
 #   echo "${MATCH}"
 #done
 
+# helper variable initialization
+COUNT_NEIGHBORS_REMOVED=0
+COUNT_ROUTEMAPS_REMOVED=0
+
 #
 # walk through all grouping commands in ${RUNNING_CONFIG} and check if
 # those commands have vanished from ${PRESTAGE_CONFIG}.
@@ -462,8 +466,10 @@ for GROUP_CMD in "${!GROUPING_CMDS[@]}"; do
       #
       if ! grep -qsE "^${ENTRY}" ${PRESTAGE_CONFIG}; then
          PRE_CMDS+=( "no ${ENTRY}" )
+         if [[ "${GROUP_CMD}" =~ "route-map" ]]; then
+            ((COUNT_ROUTEMAPS_REMOVED++))
+         fi
       fi
-
    done
 done
 log_end_msg "${#PRE_CMDS[@]} scheduled for removal."
@@ -811,6 +817,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          BGP_PEER_REMOVAL=${BASH_REMATCH[1]}
          if ! in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}$; then
             REMOVE_CMDS+=( "no neighbor ${BGP_PEER_REMOVAL}" )
+            ((COUNT_NEIGHBORS_REMOVED++))
          fi
          NO_COMMAND=true
          break
@@ -1135,7 +1142,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
    #
    if [ ! -z "${ENTERED_GROUP}" ]; then
       #
-      # if group hasn't exist before, we can continue
+      # if group has not exist before, we can continue
       #
       if ! in_array RUNNING_ENTRIES ^[[:blank:]]*${ENTERED_GROUP// /[[:blank:]]}$; then
       #if ! grep -qsE "^(\s*)${ENTERED_GROUP}" ${RUNNING_CONFIG}; then
@@ -1201,7 +1208,7 @@ if [ ${#NEW_CMDS[@]} -gt 0 ]; then
       #
       # if the new command is just an empty group, skip it.
       #
-      # this will lead to a string "CURRENT_COMMAND NEXT_COMMAND
+      # this will lead to a string "CURRENT_COMMAND NEXT_COMMAND"
       NEXT_COMMAND=${NEW_CMDS[@]:NEW_CMD_ID:2}
       for GROUP_CMD in ${GROUPING_CMDS[@]}; do
          if [[ "${NEW_CMD}" =~ ${GROUP_CMD} ]] && [[ "${NEXT_COMMAND}" =~ [[:blank:]]exit$ ]]; then
@@ -1244,6 +1251,30 @@ fi
 #   fi
 #fi
 #exit 1
+
+
+#
+# check for failsafe settings.
+#
+if [ ! -z "${FAILSAFE_MAX_NEIGHBORS_REMOVE}" ] && \
+   [ ${FAILSAFE_MAX_NEIGHBORS_REMOVE} -gt 0 ] && \
+   [ ! -z "${COUNT_NEIGHBORS_REMOVED}" ] && \
+   [ ${COUNT_NEIGHBORS_REMOVED} -ge ${FAILSAFE_MAX_NEIGHBORS_REMOVE} ] && \
+   [ "x${DRY_RUN}" != "xtrue" ] && \
+   ( [ -z "${DO_WHAT_I_SAID}" ] || [ "x${DO_WHAT_I_SAID}" != "xtrue" ] ); then
+   log_failure_msg "FAILSAFE: FAILSAFE_MAX_NEIGHBORS_REMOVE=${FAILSAFE_MAX_NEIGHBORS_REMOVE} and more than ${COUNT_NEIGHBORS_REMOVED} will get removed!"
+   exit 1
+fi
+
+if [ ! -z "${FAILSAFE_MAX_ROUTEMAPS_REMOVE}" ] && \
+   [ ${FAILSAFE_MAX_ROUTEMAPS_REMOVE} -gt 0 ] && \
+   [ ! -z "${COUNT_ROUTEMAPS_REMOVED}" ] && \
+   [ ${COUNT_ROUTEMAPS_REMOVED} -ge ${FAILSAFE_MAX_ROUTEMAPS_REMOVE} ] && \
+   [ "x${DRY_RUN}" != "xtrue" ] && \
+   ( [ -z "${DO_WHAT_I_SAID}" ] || [ "x${DO_WHAT_I_SAID}" != "xtrue" ] ); then
+   log_failure_msg "FAILSAFE: FAILSAFE_MAX_ROUTEMAPS_REMOVE=${FAILSAFE_MAX_ROUTEMAPS_REMOVE} and more than ${COUNT_ROUTEMAPS_REMOVED} will get removed!"
+   exit 1
+fi
 
 #
 # execute all commands prior loading the new configuration
