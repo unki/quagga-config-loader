@@ -20,6 +20,7 @@
 readonly COLOR_RESTORE='\e[0m'
 readonly COLOR_GREEN='\e[0;32m'
 readonly COLOR_RED='\e[0;31m'
+readonly COLOR_MAGENTA='\e[0;35m'
 
 # found at https://raymii.org/s/snippets/Bash_Bits_Check_If_Item_Is_In_Array.html
 in_array () {
@@ -78,6 +79,12 @@ log_failure_msg () {
    echo -n ' '
    echo -en ${COLOR_RED}
    echo -n " ${1}"
+   echo -e ${COLOR_RESTORE}
+}
+
+log_warning_msg () {
+   echo -en ${COLOR_MAGENTA}
+   echo -n "${1}"
    echo -e ${COLOR_RESTORE}
 }
 
