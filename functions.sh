@@ -160,6 +160,41 @@ check_configuration () {
       log_failure_msg "No permission to enter directory ${PRESTAGE_DIR}!"
       exit 1
    fi
+
+   #
+   # BGP_IGNORE_NEIGHBOR_SHUTDOWN
+   #
+   if [ ! -z "${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" ] && \
+      [ "x${BGP_IGNORE_NEIGHBOR_SHUTDOWN}" != "x1" ]; then
+      log_failure_msg "BGP_IGNORE_NEIGHBOR_SHUTDOWN needs to be either not set, 0 or 1!"
+      exit 1
+   fi
+
+   #
+   # failsafe settings
+   #
+   if [ ! -z "${FAILSAFE_MAX_NEIGHBORS_REMOVE}" ] && \
+      ( ! [[ ${FAILSAFE_MAX_NEIGHBORS_REMOVE} =~ ^[[:digit:]]+$ ]] || \
+      [ ${FAILSAFE_MAX_NEIGHBORS_REMOVE} -lt 0 ] ); then
+      log_failure_msg "${FAILSAFE_MAX_NEIGHBORS_REMOVE} needs to be either not set, 0 or a positiv integer!"
+      exit 1;
+   fi
+   if [ ! -z "${FAILSAFE_MAX_ROUTEMAPS_REMOVE}" ] && \
+      ( ! [[ ${FAILSAFE_MAX_ROUTEMAPS_REMOVE} =~ ^[[:digit:]]+$ ]] || \
+      [ ${FAILSAFE_MAX_ROUTEMAPS_REMOVE} -lt 0 ] ); then
+      log_failure_msg "${FAILSAFE_MAX_ROUTEMAPS_REMOVE} needs to be either not set, 0 or a positiv integer!"
+      exit 1;
+   fi
+   if [ ! -z "${FAILSAFE_NEVER_REMOVE_NEIGHBOR}" ]; then
+      local NEIGHBOR
+      IFS=' ' read -r -a FAILSAFE_NEVER_REMOVE_NEIGHBOR_ARRAY <<<"${FAILSAFE_NEVER_REMOVE_NEIGHBOR}"
+      for NEIGHBOR in "${FAILSAFE_NEVER_REMOVE_NEIGHBOR_ARRAY[@]}"; do
+         if ! [[ "${NEIGHBOR}" =~ ^[[:digit:]]{1,3}.[[:digit:]]{1,3}.[[:digit:]]{1,3}.[[:digit:]]{1,3}$ ]]; then
+            log_failure_msg "${NEIGHBOR} does not seem to be a valid IPv4 address!"
+            exit 1
+         fi
+      done
+   fi
 }
 
 check_parameters () {
