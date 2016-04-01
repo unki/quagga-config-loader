@@ -490,7 +490,6 @@ log_end_msg "${#ENTRIES[@]} entries."
 for ENTRY_ID in "${!ENTRIES[@]}"; do
 
    # reset helper variables
-   BGP_PEER_REMOVAL=
    NEIGHBOR=
    PEER_GROUP=
 
@@ -828,8 +827,8 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       # removed (because it's current hold in BGP_PEER_REMOVAL variable) we are
       # not going to issue another removal-command for that neighbor
       #
-      if [ ! -z "${BGP_PEER_REMOVAL}" ] &&
-         [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:print:]]+$ ]]; then
+      if [ ! -z "${BGP_PEER_REMOVAL}" ] && \
+         [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}[[:blank:]][[:print:]]+ ]]; then
          NO_COMMAND=true
          break
       fi
