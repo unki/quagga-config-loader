@@ -814,10 +814,24 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]([[:graph:]]+)[[:blank:]]remote-as[[:blank:]][[:digit:]]+$ ]] || \
          [[ "${NO_COMMAND}" =~ ^no[[:blank:]]neighbor[[:blank:]]([[:graph:]]+)$ ]]; then
          BGP_PEER_REMOVAL=${BASH_REMATCH[1]}
-         if ! in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}$; then
-            REMOVE_CMDS+=( "no neighbor ${BGP_PEER_REMOVAL}" )
-            ((COUNT_NEIGHBORS_REMOVED++))
+
+         #
+         # check if neighbor is already scheduled for removal.
+         #
+         if in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BGP_PEER_REMOVAL}$; then
+            NO_COMMAND=true
+            break
          fi
+
+         if in_array FAILSAFE_NEVER_REMOVE_NEIGHBOR_ARRAY ${BGP_PEER_REMOVAL} && \
+            ( [ -z "${DO_WHAT_I_SAID}" ] || [ "x${DO_WHAT_I_SAID}" != "xtrue" ] ); then
+            log_warning_msg "Neighbor ${BGP_PEER_REMOVAL} would have been removed, but it is listed in FAILSAFE_NEVER_REMOVE_NEIGHBOR! Ignoring it."
+            NO_COMMAND=true
+            break
+         fi
+
+         REMOVE_CMDS+=( "no neighbor ${BGP_PEER_REMOVAL}" )
+         ((COUNT_NEIGHBORS_REMOVED++))
          NO_COMMAND=true
          break
       fi
