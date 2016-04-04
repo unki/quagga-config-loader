@@ -736,11 +736,22 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          exit 1
       fi
 
+      #
       # passwords - strangly there is no "no password" command in Quagga.
       # so we are not trying to unset an existing password line.
+      #
       if [[ "${ENTRY}" =~ ^[[:blank:]]*password[[:blank:]] ]]; then
          NO_COMMAND=true
          break;
+      fi
+
+      #
+      # special case for bgpd. the no-command for 'neighbor x.x.x.x next-hop-self' is not
+      # explicitly mentioned in the retrieved commands-list. so we have to capture it here.
+      # ex.: neighbor vpn-router next-hop-self
+      #
+      if [[ "${ENTRY}" =~ ^[[:blank:]]*neighbor[[:blank:]][[:graph:]]+[[:blank:]]next-hop-self$ ]]; then
+         MATCH_COMMAND="neighbor[[:blank:]][[:graph:]]+[[:blank:]]next-hop-self"
       fi
 
       #
@@ -835,6 +846,20 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
          NO_COMMAND=true
          break
       fi
+      #
+      # for all other neighbor commands, if a neighbor is already scheduled for removal,
+      # ignore further commands to unset.
+      #
+      if [[ "${ENTRY}" =~ ^[[:blank:]]*neighbor[[:blank:]]([[:graph:]]+)[[:blank:]][[:graph:]]+$ ]]; then
+         #
+         # check if neighbor is already scheduled for removal.
+         #
+         if in_array REMOVE_CMDS ^no[[:blank:]]neighbor[[:blank:]]${BASH_REMATCH[1]}$; then
+            log_warning_msg "peer ${BGP_PEER_REMOVAL} scheduled for removal, ignoring all further no-commands on it!"
+            NO_COMMAND=true
+            break
+         fi
+      fi
 
       #
       # special case for bgpd - if its a neighbor-command and the peer is getting
@@ -882,7 +907,7 @@ for ENTRY_ID in "${!ENTRIES[@]}"; do
       fi
 
       #echo "Entry: ${ENTRY}"
-      ##echo "Best match: ${MATCH_COMMAND}"
+      #echo "Best match: ${MATCH_COMMAND}"
       #echo "No command: ${MATCH_NO_COMMAND}"
       #echo "Will use: ${NO_COMMAND}"
       #exit 5
